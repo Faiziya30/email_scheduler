@@ -42,13 +42,17 @@ ReachInbox Email Scheduler uses **BullMQ backed by Redis sorted sets (`zset`)**:
 4. **Idempotency & Deduplication**: Each email job uses a deterministic `jobId` derived from database IDs (`email-job-<uuid>`). BullMQ enforces uniqueness in Redis, preventing duplicate job creation even under retries or repeated API calls.
 
 ### Rate Limiting & Concurrency Architecture
-- **Worker Concurrency**: Driven by `WORKER_CONCURRENCY` (default `5`), allowing parallel execution without thread starving.
-- **Minimum Inter-Send Delay**: Configured via BullMQ's native worker `limiter` option (`max: 1, duration: MIN_DELAY_MS_BETWEEN_SENDS`), enforcing a uniform gap between outgoing SMTP connections.
-- **Redis Atomic Hourly Cap Per Sender**:
-  - Key format: `rate:{senderId}:{YYYY-MM-DDTHH}`.
-  - Increment: Atomic `INCR` with a 2-hour TTL (`EXPIRE`). Multi-process and multi-worker safe.
-  - Rescheduling Behavior: When a sender's cap (`MAX_EMAILS_PER_HOUR_PER_SENDER`) is reached, jobs are **never failed or dropped**. Instead, jobs are deferred to the beginning of the next hour window (`YYYY-MM-DDTHH+1:00:00.000Z`) with incremental staggering (`+ 1000ms * n`), preserving original dispatch order.
-- **Real-Time Slack Alerts**: The moment a sender's hourly limit is reached, a live alert is posted to the user's integrated Slack workspace.
+
+#### 1. Disambiguating the Two "Delay" Knobs
+To avoid confusion between batch sequencing and global worker throttling:
+- **`delayMs` (Per-Batch Stagger Interval)**: Passed in the request body of `POST /api/emails/schedule`. Controls the scheduled spread across emails in a single batch (e.g. email 1 at `t=0`, email 2 at `t=delayMs`, email 3 at `t=2*delayMs`).
+- **`MIN_DELAY_MS_BETWEEN_SENDS` (Global Worker Throttle)**: An environment variable passed to BullMQ's native worker `limiter: { max: 1, duration: MIN_DELAY_MS_BETWEEN_SENDS }`. Enforces a strict minimum spacing between any two outgoing SMTP socket operations across all concurrent workers, preventing burst flooding of SMTP servers regardless of batch sizes.
+
+#### 2. Redis Atomic Hourly Cap Per Sender (Race-Condition Free)
+- **Key Pattern**: `rate:{senderId}:{YYYY-MM-DDTHH}` (UTC hourly bucket).
+- **Atomic Execution**: Follows the **unconditional INCR-first pattern** (`currentCount = await redis.incr(key)`). If `currentCount > limit`, the job is immediately rescheduled for the next hour window. This completely eliminates check-then-increment race conditions where multiple concurrent workers might read the same count and simultaneously over-send.
+- **Order-Preserving Rescheduling**: When a limit is breached, jobs are **never failed or dropped**. Instead, jobs are deferred to the start of the next hour window (`YYYY-MM-DDTHH+1:00:00.000Z`) with incremental stagger offsets (`staggerOffset = index * MIN_DELAY_MS_BETWEEN_SENDS`), preserving original queue order.
+- **Real-Time Slack Alerts**: When the cap is breached, the worker queries PostgreSQL for an active `SlackIntegration` and posts an alert to the user's workspace. If no integration is connected, it gracefully no-ops without error.
 
 ---
 
