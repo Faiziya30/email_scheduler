@@ -1,2 +1,1 @@
-// Auth/App Context placeholder
-export {};
+export { AuthProvider, useAuth } from './AuthContext';

@@ -2,14 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📧</text></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ReachInbox - Email Scheduler</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- SEO -->
+    <title>ReachInbox Email Scheduler</title>
+    <meta name="description" content="Production-grade email scheduling platform with BullMQ, Redis, Elasticsearch search, Google OAuth, and Slack rate-limit alerts." />
+    <meta name="robots" content="noindex" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="ReachInbox Email Scheduler" />
+    <meta property="og:description" content="Schedule, monitor and search bulk email campaigns in real-time." />
+    <meta property="og:type" content="website" />
   </head>
-  <body class="bg-gray-900 text-gray-100 font-sans antialiased min-h-screen">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
