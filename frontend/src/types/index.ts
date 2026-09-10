@@ -1,3 +1,5 @@
+export * from './user';
+
 // ─── Email Job ───────────────────────────────────────────────────────────────
 export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED';
 
@@ -49,14 +51,6 @@ export interface ApiError {
   status: 'error';
   statusCode: number;
   message: string;
-}
-
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-export interface User {
-  id: string;
-  email: string;
-  name?: string;
-  avatarUrl?: string;
 }
 
 // ─── Search Result ────────────────────────────────────────────────────────────

@@ -1,46 +1,78 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from '../types';
-import { authApi } from '../api';
+import { getMe, logout as apiLogout, devToken as apiDevToken, authApi } from '../api/auth';
 
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
+  isAuthenticated: boolean;
   login: () => void;
   devLogin: () => Promise<void>;
   logout: () => Promise<void>;
+  refetchUser: () => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  // Attempt to restore session from httpOnly cookie on mount
-  useEffect(() => {
-    authApi
-      .me()
-      .then((res) => setUser(res.data))
-      .catch(() => setUser(null))
-      .finally(() => setIsLoading(false));
-  }, []);
+  // Query /auth/me on mount with React Query
+  const {
+    data: user,
+    isLoading,
+    refetch: refetchUser,
+  } = useQuery<User | null>({
+    queryKey: ['auth', 'me'],
+    queryFn: async () => {
+      try {
+        return await getMe();
+      } catch (err: any) {
+        // 401 unauthenticated is expected when not logged in
+        return null;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
   const login = useCallback(() => {
-    window.location.href = authApi.googleLoginUrl();
+    // Full page redirect to Google OAuth
+    window.location.href = authApi.getGoogleAuthUrl();
   }, []);
 
   const devLogin = useCallback(async () => {
-    const res = await authApi.devToken();
-    setUser(res.user);
-  }, []);
+    const loggedInUser = await apiDevToken();
+    queryClient.setQueryData(['auth', 'me'], loggedInUser);
+  }, [queryClient]);
 
   const logout = useCallback(async () => {
-    await authApi.logout();
-    setUser(null);
-  }, []);
+    try {
+      await apiLogout();
+    } catch {
+      // ignore network failure on logout
+    } finally {
+      queryClient.setQueryData(['auth', 'me'], null);
+      queryClient.clear();
+      window.location.href = '/login';
+    }
+  }, [queryClient]);
+
+  const isAuthenticated = Boolean(user && user.id);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, devLogin, logout }}>
+    <AuthContext.Provider
+      value={{
+        user: user ?? null,
+        isLoading,
+        isAuthenticated,
+        login,
+        devLogin,
+        logout,
+        refetchUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -48,6 +80,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = (): AuthContextValue => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
+  if (!ctx) {
+    throw new Error('useAuth must be used within an <AuthProvider>');
+  }
   return ctx;
 };

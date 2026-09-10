@@ -3,20 +3,30 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import { Spinner } from './components/Loader';
 
-/** Redirects unauthenticated users to /login */
-const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
-  const { user, isLoading } = useAuth();
+/**
+ * Guard that redirects unauthenticated users to /login
+ */
+const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { user, isLoading, isAuthenticated } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <span className="h-10 w-10 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-[#090D16]">
+        <div className="flex flex-col items-center gap-3">
+          <Spinner size="xl" color="border-indigo-500" />
+          <p className="text-xs text-slate-400 font-medium">Verifying authorization...</p>
+        </div>
       </div>
     );
   }
 
-  return user ? element : <Navigate to="/login" replace />;
+  if (!isAuthenticated && !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
 };
 
 export const App: React.FC = () => {
@@ -25,8 +35,14 @@ export const App: React.FC = () => {
       <Route path="/login" element={<Login />} />
       <Route
         path="/dashboard"
-        element={<ProtectedRoute element={<Dashboard />} />}
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
       />
+      {/* Root redirects to /dashboard (which redirects to /login if unauth) */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
