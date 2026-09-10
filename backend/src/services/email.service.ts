@@ -1,11 +1,25 @@
 import nodemailer, { Transporter } from 'nodemailer';
+import { env } from '../config/env';
 
 let transporterPromise: Promise<Transporter> | null = null;
 
 const getTransporter = async (): Promise<Transporter> => {
   if (!transporterPromise) {
     transporterPromise = (async () => {
-      console.log('📬 Initializing Ethereal Email test account...');
+      if (env.ETHEREAL_USER && env.ETHEREAL_PASS) {
+        console.log(`📬 Using configured Ethereal account: ${env.ETHEREAL_USER}`);
+        return nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: env.ETHEREAL_USER,
+            pass: env.ETHEREAL_PASS,
+          },
+        });
+      }
+
+      console.log('📬 Initializing auto-generated Ethereal Email test account...');
       const testAccount = await nodemailer.createTestAccount();
       console.log(`✨ Ethereal Email account created: ${testAccount.user}`);
 

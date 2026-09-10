@@ -26,6 +26,9 @@ const envSchema = z.object({
   WORKER_CONCURRENCY: z.string().default('5').transform((val) => parseInt(val, 10)),
   MIN_DELAY_MS_BETWEEN_SENDS: z.string().default('1000').transform((val) => parseInt(val, 10)),
   MAX_EMAILS_PER_HOUR_PER_SENDER: z.string().default('100').transform((val) => parseInt(val, 10)),
+
+  ETHEREAL_USER: z.string().optional(),
+  ETHEREAL_PASS: z.string().optional(),
 });
 
 const _env = envSchema.safeParse(process.env);
