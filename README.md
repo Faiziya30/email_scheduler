@@ -119,6 +119,21 @@ npm run dev
 
 ---
 
+## Google OAuth Setup
+
+To enable real Google login (optional — dev-token works without this):
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials.
+2. Create an **OAuth 2.0 Client ID** (type: Web Application).
+3. Add authorized redirect URI: `http://localhost:5000/api/auth/google/callback`.
+4. Copy Client ID & Secret into `backend/.env`:
+   ```env
+   GOOGLE_CLIENT_ID=your_client_id
+   GOOGLE_CLIENT_SECRET=your_client_secret
+   ```
+5. Restart the backend — `GET /api/auth/google` will redirect to Google's consent screen.
+
+---
+
 ## Deliverable Checklist
 - [x] Monorepo layout (`backend/`, `frontend/`, `docker-compose.yml`)
 - [x] Docker Compose setup for PostgreSQL, Redis, and Elasticsearch with healthchecks
@@ -128,11 +143,25 @@ npm run dev
 - [x] Bull Board Express Dashboard mounted at `/admin/queues`
 - [x] Process restart persistence & idempotency verification
 - [x] Real Email Scheduling API (`POST /api/emails/schedule`, `GET /api/emails/scheduled`, `GET /api/emails/sent`)
-- [x] Multi-recipient CSV upload parsing via Multer
+- [x] Multi-recipient CSV upload parsing via Multer (backend) + file picker UI (frontend)
 - [x] Ethereal Email SMTP delivery with preview URLs
-- [x] Redis-backed atomic hourly rate limiter per sender
+- [x] Redis-backed atomic hourly rate limiter per sender (INCR-first, race-condition free)
 - [x] Next-hour order-preserving staggered rescheduling for over-limit emails
 - [x] Real-time Slack rate-limit alert notifications with graceful fallback
 - [x] Fail-fast environment variable validation with Zod
 - [x] Health check endpoint `GET /api/health`
-- [x] Frontend React + Vite + TypeScript scaffold with Tailwind CSS & React Query
+- [x] Elasticsearch index with explicit field mapping (`emails` index)
+- [x] Email indexing on PENDING schedule, SENT, and FAILED status transitions
+- [x] Full-text search API `GET /api/emails/search?q=...` (multi-match + wildcard + fuzzy)
+- [x] Google OAuth 2.0 via Passport.js (`GET /api/auth/google`, callback, `/api/auth/me`)
+- [x] JWT sessions in httpOnly cookies (`Secure`, `SameSite: lax`)
+- [x] `authGuard` middleware protecting `/api/emails` and `/api/slack` routes
+- [x] Dev quick-login endpoint (`POST /api/auth/dev-token`) for testing without GCP credentials
+- [x] Frontend React + Vite + TypeScript with Tailwind CSS & TanStack React Query
+- [x] Auth context with session restore, Google login, dev login, and logout
+- [x] Protected `/dashboard` route with ProtectedRoute guard
+- [x] Login page with Google OAuth button and dev quick-login
+- [x] Dashboard with stats bar, schedule form, tabbed email list (scheduled/sent/failed)
+- [x] Elasticsearch live search panel with 350ms debounce
+- [x] CSV/TXT file upload in schedule form with client-side recipient count detection
+- [x] Auto-refresh of scheduled email list every 10 seconds
