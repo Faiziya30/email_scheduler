@@ -5,6 +5,7 @@ import { env } from '../config/env';
 import { prisma } from '../models';
 import { sendEmail } from '../services/email.service';
 import { RateLimiterService } from '../services/rateLimiter.service';
+import { indexEmail } from '../services/search.service';
 
 export interface EmailJobData {
   emailJobId?: string;
@@ -80,6 +81,18 @@ export const emailWorker = new Worker<EmailJobData>(
         },
       });
 
+      // Update Elasticsearch with deferred schedule time
+      await indexEmail({
+        id: emailJobId,
+        userId,
+        sender: senderEmail,
+        recipient,
+        subject,
+        body,
+        status: 'PENDING',
+        scheduledAt: rescheduledTargetDate,
+      });
+
       console.log(
         `[Worker] 🔁 Job ${job.id} rescheduled to: ${rescheduledTargetDate.toISOString()} (+${Math.round(staggeredDelayMs / 1000)}s delay)`,
       );
@@ -118,7 +131,17 @@ export const emailWorker = new Worker<EmailJobData>(
         },
       });
 
-      // TODO: Index into Elasticsearch (Phase 4)
+      // Upsert into Elasticsearch with status: SENT
+      await indexEmail({
+        id: emailJobId,
+        userId,
+        sender: senderEmail,
+        recipient,
+        subject,
+        body,
+        status: 'SENT',
+        sentAt,
+      });
 
       console.log(`[Worker] ✅ Email successfully sent to ${recipient}`);
       return {
@@ -139,7 +162,16 @@ export const emailWorker = new Worker<EmailJobData>(
         },
       });
 
-      // TODO: Index into Elasticsearch (Phase 4)
+      // Upsert into Elasticsearch with status: FAILED
+      await indexEmail({
+        id: emailJobId,
+        userId,
+        sender: senderEmail,
+        recipient,
+        subject,
+        body,
+        status: 'FAILED',
+      });
 
       throw sendError;
     }

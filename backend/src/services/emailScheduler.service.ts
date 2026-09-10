@@ -2,6 +2,7 @@ import { prisma } from '../models';
 import { emailQueue } from '../queues/emailQueue';
 import { getOrCreateDefaultUserAndSender } from '../models/userHelper';
 import { env } from '../config/env';
+import { indexEmail } from './search.service';
 
 export interface ScheduleEmailPayload {
   subject: string;
@@ -86,6 +87,18 @@ export class EmailSchedulerService {
       const updatedJob = await prisma.emailJob.update({
         where: { id: emailJob.id },
         data: { bullJobId },
+      });
+
+      // 5. Index into Elasticsearch as PENDING
+      await indexEmail({
+        id: updatedJob.id,
+        userId: activeUserId,
+        sender: sender.emailAddress,
+        recipient: updatedJob.recipient,
+        subject: updatedJob.subject,
+        body: updatedJob.body,
+        status: 'PENDING',
+        scheduledAt: updatedJob.scheduledAt,
       });
 
       scheduledJobs.push(updatedJob);

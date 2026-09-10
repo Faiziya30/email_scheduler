@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { EmailSchedulerService } from '../services/emailScheduler.service';
+import { searchEmails } from '../services/search.service';
 import csvParser from 'csv-parser';
 import { Readable } from 'stream';
 
@@ -20,7 +21,6 @@ export class EmailController {
             stream
               .pipe(csvParser())
               .on('data', (row: Record<string, string>) => {
-                // Check all columns for email pattern
                 for (const key of Object.keys(row)) {
                   const val = row[key]?.trim();
                   if (val && val.includes('@')) {
@@ -33,7 +33,6 @@ export class EmailController {
               .on('error', reject);
           });
         } else {
-          // Plain text list of emails separated by newlines/commas
           const extracted = fileContent
             .split(/[\r\n,]+/)
             .map((e) => e.trim())
@@ -43,7 +42,6 @@ export class EmailController {
 
         recipients = parsedEmails;
       } else if (typeof recipients === 'string') {
-        // If passed as comma-separated or JSON string
         try {
           recipients = JSON.parse(recipients);
         } catch {
@@ -102,6 +100,29 @@ export class EmailController {
         status: 'success',
         results: emails.length,
         data: emails,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public static async search(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { q } = req.query;
+      if (!q || typeof q !== 'string') {
+        res.status(400).json({
+          status: 'error',
+          statusCode: 400,
+          message: 'Search query parameter "q" is required.',
+        });
+        return;
+      }
+
+      const results = await searchEmails(q, (req as any).user?.id);
+      res.status(200).json({
+        status: 'success',
+        results: results.length,
+        data: results,
       });
     } catch (error) {
       next(error);
