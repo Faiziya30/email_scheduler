@@ -1,35 +1,157 @@
-import { Worker, Job } from 'bullmq';
+import { Worker, Job, DelayedError } from 'bullmq';
 import { EMAIL_QUEUE_NAME } from '../queues/emailQueue';
 import { redisConnectionOptions } from '../config/redis';
 import { env } from '../config/env';
+import { prisma } from '../models';
+import { sendEmail } from '../services/email.service';
+import { RateLimiterService } from '../services/rateLimiter.service';
 
 export interface EmailJobData {
+  emailJobId?: string;
+  userId?: string;
+  senderId?: string;
+  senderEmail?: string;
   recipient?: string;
   subject?: string;
   body?: string;
-  emailJobId?: string;
+  scheduledAt?: string;
+  hourlyLimit?: number;
+  delayMs?: number;
   isDummy?: boolean;
   message?: string;
 }
 
 export const emailWorker = new Worker<EmailJobData>(
   EMAIL_QUEUE_NAME,
-  async (job: Job<EmailJobData>) => {
-    console.log(`[Worker] ⚙️ Processing job ID: ${job.id} (Attempt ${job.attemptsMade + 1})`);
-    console.log(`[Worker] 📦 Job payload:`, JSON.stringify(job.data, null, 2));
+  async (job: Job<EmailJobData>, token) => {
+    const {
+      emailJobId,
+      userId,
+      senderId,
+      senderEmail = 'sender@reachinbox.ai',
+      recipient,
+      subject,
+      body,
+      hourlyLimit,
+      isDummy,
+    } = job.data;
 
-    if (job.data.isDummy) {
-      console.log(`[Worker] 🧪 Dummy test job executed successfully: ${job.data.message || job.id}`);
+    console.log(`[Worker] ⚙️ Processing job ID: ${job.id} (Attempt ${job.attemptsMade + 1})`);
+
+    // Handle dummy jobs from test endpoints if present
+    if (isDummy) {
+      console.log(`[Worker] 🧪 Test job executed successfully: ${job.data.message || job.id}`);
       return { status: 'processed', type: 'dummy', processedAt: new Date().toISOString() };
     }
 
-    // Phase 3 will replace this with real SMTP email delivery via Ethereal Email
-    console.log(`[Worker] ✉️ Simulating send to ${job.data.recipient || 'unknown'}`);
-    return { status: 'sent', recipient: job.data.recipient, sentAt: new Date().toISOString() };
+    if (!emailJobId || !recipient || !subject || !body || !senderId || !userId) {
+      console.error(`[Worker] ❌ Missing required job data fields for job ${job.id}`);
+      throw new Error('Invalid email job payload');
+    }
+
+    // -------------------------------------------------------------
+    // 1. Rate Limiting Check (Atomic Redis Counter)
+    // -------------------------------------------------------------
+    const rateCheck = await RateLimiterService.checkAndConsumeRateLimit(senderId, hourlyLimit);
+
+    if (!rateCheck.allowed) {
+      console.warn(
+        `[Worker] ⏳ Rate limit exceeded for sender: ${senderEmail} (${rateCheck.currentCount - 1}/${rateCheck.limit} used). Rescheduling...`,
+      );
+
+      // Trigger Slack alert (silently no-ops if not connected)
+      await RateLimiterService.handleRateLimitHit(userId, senderEmail, rateCheck.nextHourDate);
+
+      // Calculate staggered delay for next hour window to preserve relative order
+      const staggeredDelayMs = await RateLimiterService.getRescheduledDelay(
+        senderId,
+        rateCheck.nextHourDate,
+        rateCheck.delayUntilNextHourMs,
+      );
+
+      const rescheduledTargetDate = new Date(Date.now() + staggeredDelayMs);
+
+      // Update database row with rescheduled target timestamp
+      await prisma.emailJob.update({
+        where: { id: emailJobId },
+        data: {
+          scheduledAt: rescheduledTargetDate,
+          status: 'PENDING',
+        },
+      });
+
+      console.log(
+        `[Worker] 🔁 Job ${job.id} rescheduled to: ${rescheduledTargetDate.toISOString()} (+${Math.round(staggeredDelayMs / 1000)}s delay)`,
+      );
+
+      // Move job back to delayed state in BullMQ and throw DelayedError to signal BullMQ
+      if (token) {
+        await job.moveToDelayed(Date.now() + staggeredDelayMs, token);
+        throw new DelayedError();
+      }
+
+      return {
+        status: 'rescheduled',
+        reason: 'rate_limit_exceeded',
+        scheduledAt: rescheduledTargetDate.toISOString(),
+      };
+    }
+
+    // -------------------------------------------------------------
+    // 2. Email Delivery via Ethereal (Nodemailer)
+    // -------------------------------------------------------------
+    try {
+      const sendResult = await sendEmail({
+        from: senderEmail,
+        to: recipient,
+        subject,
+        body,
+      });
+
+      // Update PostgreSQL status: SENT
+      const sentAt = new Date();
+      await prisma.emailJob.update({
+        where: { id: emailJobId },
+        data: {
+          status: 'SENT',
+          sentAt,
+        },
+      });
+
+      // TODO: Index into Elasticsearch (Phase 4)
+
+      console.log(`[Worker] ✅ Email successfully sent to ${recipient}`);
+      return {
+        status: 'sent',
+        recipient,
+        sentAt: sentAt.toISOString(),
+        messageId: sendResult.messageId,
+        previewUrl: sendResult.previewUrl,
+      };
+    } catch (sendError: any) {
+      console.error(`[Worker] ❌ Failed to send email to ${recipient}:`, sendError.message);
+
+      // Update PostgreSQL status: FAILED
+      await prisma.emailJob.update({
+        where: { id: emailJobId },
+        data: {
+          status: 'FAILED',
+        },
+      });
+
+      // TODO: Index into Elasticsearch (Phase 4)
+
+      throw sendError;
+    }
   },
   {
     connection: redisConnectionOptions,
     concurrency: env.WORKER_CONCURRENCY,
+    // BullMQ rate limiter enforcing min delay between sends across workers
+    limiter: {
+      max: 1,
+      duration: env.MIN_DELAY_MS_BETWEEN_SENDS || 1000,
+    },
   },
 );
 
@@ -38,9 +160,14 @@ emailWorker.on('active', (job) => {
 });
 
 emailWorker.on('completed', (job, result) => {
-  console.log(`[Worker Events] ✅ Job ${job.id} COMPLETED with result:`, result);
+  console.log(`[Worker Events] ✅ Job ${job.id} COMPLETED:`, result?.status);
 });
 
 emailWorker.on('failed', (job, err) => {
-  console.error(`[Worker Events] ❌ Job ${job?.id} FAILED with error:`, err.message);
+  // DelayedError is not a true failure, it's a reschedule
+  if (err?.name === 'DelayedError') {
+    console.log(`[Worker Events] 🕒 Job ${job?.id} cleanly deferred to next hour window`);
+    return;
+  }
+  console.error(`[Worker Events] ❌ Job ${job?.id} FAILED:`, err.message);
 });
