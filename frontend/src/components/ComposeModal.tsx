@@ -17,6 +17,7 @@ import {
   Link as LinkIcon,
   X,
   FileText,
+  Calendar,
 } from 'lucide-react';
 import { scheduleEmail } from '../api/emails';
 import { useToast } from '../context/ToastContext';
@@ -60,16 +61,31 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
 
   // Scheduling options
-  const defaultStartTime = new Date(Date.now() + 60 * 1000).toISOString().slice(0, 16);
-  const [startTime, setStartTime] = useState(defaultStartTime);
+  const [startTime, setStartTime] = useState<string>('');
   const [delaySec, setDelaySec] = useState<number>(2);
   const [hourlyLimit, setHourlyLimit] = useState<number>(100);
-  const [showScheduleDatePicker, setShowScheduleDatePicker] = useState(false);
+  const [showSendLaterPopover, setShowSendLaterPopover] = useState(false);
+  const [selectedPresetLabel, setSelectedPresetLabel] = useState<string | null>(null);
 
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
+
+  // Preset calculation helper
+  const getTomorrowPreset = (hour = 9, minute = 0) => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(hour, minute, 0, 0);
+    return d.toISOString().slice(0, 16);
+  };
+
+  const presets = [
+    { label: 'Tomorrow', value: getTomorrowPreset(9, 0) },
+    { label: 'Tomorrow, 10:00 AM', value: getTomorrowPreset(10, 0) },
+    { label: 'Tomorrow, 11:00 AM', value: getTomorrowPreset(11, 0) },
+    { label: 'Tomorrow, 3:00 PM', value: getTomorrowPreset(15, 0) },
+  ];
 
   // 1. Leads list upload (CSV / TXT)
   const handleLeadsFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,7 +118,6 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
         if (detectedEmails.length === 0) {
           toast.error('No valid email addresses detected in this CSV/TXT file.');
         } else {
-          // Merge unique emails
           const merged = Array.from(new Set([...recipients, ...detectedEmails]));
           setRecipients(merged);
           toast.success(
@@ -178,7 +193,6 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Auto-commit any typed recipient if user forgot to press Enter
     let finalRecipients = [...recipients];
     const pendingInput = newRecipientInput.trim().replace(/,$/, '');
     if (pendingInput && EMAIL_REGEX.test(pendingInput) && !finalRecipients.includes(pendingInput)) {
@@ -229,7 +243,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto">
-      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
+      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-visible flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150 relative">
         {/* Hidden File Input for Leads CSV / TXT */}
         <input
           ref={leadsFileInputRef}
@@ -239,7 +253,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
           className="hidden"
         />
 
-        {/* Hidden File Input for Attachments (PDF, Images, Word Docs, etc.) */}
+        {/* Hidden File Input for Attachments */}
         <input
           ref={attachmentInputRef}
           type="file"
@@ -249,8 +263,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
           className="hidden"
         />
 
-        {/* Top Header matching Figma Image 5 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-150 bg-white">
+        {/* Top Header matching Figma */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-150 bg-white rounded-t-2xl relative">
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
@@ -264,8 +278,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
             </h2>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Paperclip attachment icon for PDFs, Images, Word Docs */}
+          <div className="flex items-center gap-3 relative">
+            {/* Paperclip attachment icon */}
             <button
               type="button"
               onClick={() => attachmentInputRef.current?.click()}
@@ -280,50 +294,143 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
               )}
             </button>
 
-            {/* Clock / Schedule toggle */}
+            {/* Clock icon: Toggles "Send Later" Popover matching latest Figma screenshot */}
             <button
+              id="clock-schedule-btn"
               type="button"
-              onClick={() => setShowScheduleDatePicker(!showScheduleDatePicker)}
+              onClick={() => setShowSendLaterPopover(!showSendLaterPopover)}
               className={`p-1.5 rounded-full transition ${
-                showScheduleDatePicker
+                showSendLaterPopover || startTime
                   ? 'text-[#00A854] bg-green-50'
                   : 'text-gray-400 hover:text-[#00A854] hover:bg-green-50'
               }`}
-              title="Schedule start date and time"
+              title="Schedule Send Later"
             >
               <Clock className="h-4 w-4" />
             </button>
 
-            {/* Primary Action Button: "Send Later" with green outline */}
+            {/* Primary Action Button: "Send" with green outline matching screenshot */}
             <button
-              id="send-later-btn"
+              id="send-btn"
               type="button"
               onClick={handleScheduleSubmit}
               disabled={isSubmitting}
-              className="px-5 py-1.5 rounded-full border border-[#00A854] text-[#00A854] hover:bg-[#E8F5E9] active:scale-[0.98] font-medium text-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              className="px-6 py-1.5 rounded-full border border-[#00A854] text-[#00A854] hover:bg-[#E8F5E9] active:scale-[0.98] font-medium text-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
                   <Spinner size="sm" color="border-[#00A854]" />
-                  <span>Scheduling...</span>
+                  <span>Sending...</span>
                 </>
               ) : (
-                <span>Send Later</span>
+                <span>{startTime ? 'Send Later' : 'Send'}</span>
               )}
             </button>
+
+            {/* ─────────────────────────────────────────────────────────────
+                "Send Later" Popover Card matching exact latest Figma screenshot
+            ───────────────────────────────────────────────────────────── */}
+            {showSendLaterPopover && (
+              <div className="absolute top-12 right-0 w-72 bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 z-50 text-left space-y-4 animate-in fade-in zoom-in-95 duration-100">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-gray-900">Send Later</h3>
+                  {startTime && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartTime('');
+                        setSelectedPresetLabel(null);
+                      }}
+                      className="text-[11px] text-gray-400 hover:text-red-500"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {/* Pick date & time Input */}
+                <div className="relative">
+                  <input
+                    type="datetime-local"
+                    value={startTime}
+                    onChange={(e) => {
+                      setStartTime(e.target.value);
+                      setSelectedPresetLabel(null);
+                    }}
+                    placeholder="Pick date & time"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-800 focus:ring-2 focus:ring-[#00A854] outline-none"
+                  />
+                </div>
+
+                {/* Preset List matching screenshot */}
+                <div className="space-y-1 text-xs text-gray-700 pt-1">
+                  {presets.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setStartTime(preset.value);
+                        setSelectedPresetLabel(preset.label);
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg transition text-xs flex items-center justify-between ${
+                        selectedPresetLabel === preset.label || startTime === preset.value
+                          ? 'bg-green-50 text-[#00A854] font-semibold'
+                          : 'hover:bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      <span>{preset.label}</span>
+                      {selectedPresetLabel === preset.label && (
+                        <span className="text-[#00A854] text-xs">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Popover Footer Actions matching screenshot: Cancel & Done */}
+                <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowSendLaterPopover(false)}
+                    className="text-xs text-gray-500 hover:text-gray-800 font-medium px-2 py-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!startTime) {
+                        setStartTime(getTomorrowPreset(9, 0));
+                      }
+                      setShowSendLaterPopover(false);
+                      toast.info('Scheduled release time set.', 'Send Later');
+                    }}
+                    className="px-4 py-1 rounded-full border border-[#00A854] text-[#00A854] hover:bg-green-50 text-xs font-semibold transition"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Schedule Time Expandable Picker */}
-        {showScheduleDatePicker && (
-          <div className="px-6 py-2.5 bg-green-50/50 border-b border-green-100 flex items-center gap-3 text-xs text-gray-700">
-            <span className="font-medium text-[#007A3D]">Schedule Start Date & Time:</span>
-            <input
-              type="datetime-local"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="px-3 py-1 rounded-lg border border-green-200 bg-white text-gray-800 text-xs focus:ring-2 focus:ring-[#00A854] outline-none"
-            />
+        {/* Scheduled Notification Tag if active */}
+        {startTime && (
+          <div className="px-6 py-2 bg-green-50/70 border-b border-green-100 flex items-center justify-between text-xs text-gray-700">
+            <span className="flex items-center gap-1.5 text-[#007A3D] font-medium">
+              <Calendar className="h-3.5 w-3.5" />
+              Scheduled for: {new Date(startTime).toLocaleString()}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setStartTime('');
+                setSelectedPresetLabel(null);
+              }}
+              className="text-gray-400 hover:text-red-500 text-xs"
+            >
+              Send Immediately instead
+            </button>
           </div>
         )}
 
@@ -340,12 +447,11 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
 
           <div className="border-b border-gray-100" />
 
-          {/* Row 2: To with Recipient Pills + Inline input + Upload List button */}
+          {/* Row 2: To */}
           <div className="flex items-center justify-between gap-4 text-sm">
             <div className="flex items-center gap-4 flex-1 flex-wrap">
               <span className="w-16 text-gray-400 font-medium">To</span>
               <div className="flex items-center gap-2 flex-wrap flex-1">
-                {/* Committed recipient pills */}
                 {recipients.map((recip) => (
                   <span
                     key={recip}
@@ -362,10 +468,9 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                   </span>
                 ))}
 
-                {/* Inline text input for recipient (type and hit Enter or click anywhere) */}
                 <input
                   type="email"
-                  placeholder={recipients.length === 0 ? "recipient@example.com (press Enter)" : "add more..."}
+                  placeholder={recipients.length === 0 ? "recipient@example.com" : "add more..."}
                   value={newRecipientInput}
                   onChange={(e) => setNewRecipientInput(e.target.value)}
                   onKeyDown={handleRecipientKeyDown}
@@ -375,7 +480,6 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
               </div>
             </div>
 
-            {/* Right: Upload List Button (specifically for CSV / TXT lead lists) */}
             <button
               type="button"
               onClick={() => leadsFileInputRef.current?.click()}
@@ -432,9 +536,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
             </div>
           </div>
 
-          {/* Row 5: Large Body Container with Toolbar matching Figma Image 5 */}
+          {/* Row 5: Large Body Container with Toolbar */}
           <div className="rounded-2xl bg-[#F9FAFB] border border-gray-200/90 overflow-hidden mt-4">
-            {/* Formatting Toolbar */}
             <div className="flex items-center gap-1 sm:gap-2 px-4 py-2.5 border-b border-gray-200/80 bg-white/70 text-gray-400 text-xs overflow-x-auto">
               <button type="button" className="p-1 hover:text-gray-700 rounded"><Undo2 className="h-3.5 w-3.5" /></button>
               <button type="button" className="p-1 hover:text-gray-700 rounded"><Redo2 className="h-3.5 w-3.5" /></button>
@@ -450,7 +553,6 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
               <button type="button" className="p-1 hover:text-gray-700 rounded"><LinkIcon className="h-3.5 w-3.5" /></button>
             </div>
 
-            {/* Main Textarea */}
             <textarea
               id="compose-body"
               rows={7}
@@ -460,7 +562,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
               className="w-full bg-transparent p-5 text-sm text-gray-800 placeholder-gray-400 border-0 focus:outline-none focus:ring-0 resize-none font-normal leading-relaxed"
             />
 
-            {/* Attachments Preview Gallery matching Figma Image 4 */}
+            {/* Attachments Preview Gallery */}
             {attachments.length > 0 && (
               <div className="p-4 bg-white border-t border-gray-200/80 flex items-center gap-3 overflow-x-auto">
                 {attachments.map((att) => (
