@@ -272,29 +272,24 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Sidebar Footer: Slack Integration Status */}
-        <div className="pt-4 border-t border-gray-150 space-y-2">
+        <div className="pt-4 border-t border-gray-150">
           {slackStatus?.connected ? (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] font-medium text-emerald-700">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0"></span>
-                  <span className="truncate">Slack Connected</span>
-                </div>
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] text-xs font-medium text-[#16A34A]">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="truncate text-[11px] font-semibold text-emerald-800">Slack Alerts Active</span>
               </div>
-              <button
-                type="button"
-                onClick={handleTestSlackAlert}
-                disabled={testingSlack}
-                className="w-full py-1 px-2 rounded-lg bg-gray-50 hover:bg-gray-100 active:scale-[0.99] border border-gray-200 text-[10px] font-medium text-gray-700 transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
-              >
-                <MessageSquare className="h-3 w-3 text-[#E01E5A]" />
-                <span>{testingSlack ? 'Sending...' : 'Send Test Alert 🚀'}</span>
-              </button>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-white/90 px-1.5 py-0.5 rounded border border-emerald-200">
+                Live
+              </span>
             </div>
           ) : (
             <a
               href={getSlackConnectUrl()}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 border border-gray-200 text-[11px] font-medium text-gray-600 transition"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 hover:bg-gray-100/80 border border-gray-200 text-xs font-medium text-gray-600 transition"
               title="Connect Slack for rate-limit notifications"
             >
               <MessageSquare className="h-3.5 w-3.5 text-[#E01E5A] shrink-0" />
