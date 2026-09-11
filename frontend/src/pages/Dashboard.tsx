@@ -18,7 +18,7 @@ import { useAuth } from '../context';
 import { useToast } from '../context/ToastContext';
 import { ComposeModal } from '../components/ComposeModal';
 import { EmailDetailModal } from '../components/EmailDetailModal';
-import { getScheduledEmails, getSentEmails, searchEmails, getSlackStatus, getSlackConnectUrl } from '../api/emails';
+import { getScheduledEmails, getSentEmails, searchEmails, deleteEmail, getSlackStatus, getSlackConnectUrl } from '../api/emails';
 import type { EmailJob } from '../types';
 
 type TabType = 'scheduled' | 'sent';
@@ -106,6 +106,21 @@ export const Dashboard: React.FC = () => {
   const handleScheduleSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['emails', 'scheduled'] });
     queryClient.invalidateQueries({ queryKey: ['emails', 'sent'] });
+  };
+
+  const handleDeleteEmail = async (id: string) => {
+    try {
+      await deleteEmail(id);
+      toast.success('Email deleted successfully', 'Deleted');
+      queryClient.invalidateQueries({ queryKey: ['emails', 'scheduled'] });
+      queryClient.invalidateQueries({ queryKey: ['emails', 'sent'] });
+      queryClient.invalidateQueries({ queryKey: ['emails', 'search'] });
+      if (selectedEmail?.id === id) {
+        setSelectedEmail(null);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete email', 'Delete Error');
+    }
   };
 
   const toggleStar = (id: string, e: React.MouseEvent) => {
@@ -458,6 +473,7 @@ export const Dashboard: React.FC = () => {
       <EmailDetailModal
         email={selectedEmail}
         onClose={() => setSelectedEmail(null)}
+        onDelete={handleDeleteEmail}
       />
     </div>
   );

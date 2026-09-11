@@ -74,6 +74,15 @@ export const emailApi = {
   },
 
   /**
+   * Delete an email job
+   */
+  deleteEmail: async (id: string): Promise<void> => {
+    await apiClient<ApiSuccess<{ id: string }>>(`/emails/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
    * Get current Slack integration connection status
    */
   getSlackStatus: async (): Promise<{ connected: boolean; teamId?: string; teamName?: string; channelName?: string }> => {
@@ -97,6 +106,7 @@ export const emailApi = {
   scheduled: (limit = 100) => emailApi.getScheduledEmails(limit),
   sent: (limit = 100) => emailApi.getSentEmails(limit),
   search: (query: string) => emailApi.searchEmails(query),
+  delete: (id: string) => emailApi.deleteEmail(id),
 };
 
 export const {
@@ -104,6 +114,8 @@ export const {
   getScheduledEmails,
   getSentEmails,
   searchEmails,
+  deleteEmail,
   getSlackStatus,
   getSlackConnectUrl,
 } = emailApi;
+

@@ -81,7 +81,8 @@ export class EmailController {
   public static async getScheduled(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const limit = req.query.limit ? Number(req.query.limit) : 100;
-      const emails = await EmailSchedulerService.getScheduledEmails(limit);
+      const userId = (req as any).user?.id;
+      const emails = await EmailSchedulerService.getScheduledEmails(limit, userId);
       res.status(200).json({
         status: 'success',
         results: emails.length,
@@ -95,11 +96,27 @@ export class EmailController {
   public static async getSent(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const limit = req.query.limit ? Number(req.query.limit) : 100;
-      const emails = await EmailSchedulerService.getSentEmails(limit);
+      const userId = (req as any).user?.id;
+      const emails = await EmailSchedulerService.getSentEmails(limit, userId);
       res.status(200).json({
         status: 'success',
         results: emails.length,
         data: emails,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public static async deleteJob(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = (req as any).user?.id;
+      const result = await EmailSchedulerService.deleteEmailJob(id, userId);
+      res.status(200).json({
+        status: 'success',
+        message: 'Email job deleted successfully.',
+        data: result,
       });
     } catch (error) {
       next(error);

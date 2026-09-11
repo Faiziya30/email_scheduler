@@ -23,7 +23,44 @@ export const upsertGoogleUserMemory = (profile: { googleId: string; email: strin
   return existing;
 };
 
-export const getOrCreateDefaultUserAndSender = async (senderEmail?: string) => {
+export const getOrCreateSenderForUser = async (userId: string, senderEmail?: string) => {
+  const emailToUse = senderEmail || 'sender@reachinbox.ai';
+  try {
+    let sender = await prisma.sender.findFirst({
+      where: {
+        userId,
+        emailAddress: emailToUse,
+      },
+    });
+
+    if (!sender) {
+      sender = await prisma.sender.create({
+        data: {
+          userId,
+          emailAddress: emailToUse,
+        },
+      });
+    }
+
+    return sender;
+  } catch (error) {
+    console.warn('⚠️ Database query for sender fallback, creating in-memory sender.');
+    const sender = {
+      id: 'snd_' + Math.random().toString(36).substring(2, 9),
+      userId,
+      emailAddress: emailToUse,
+      createdAt: new Date(),
+    };
+    memorySenders.set(sender.id, sender);
+    return sender;
+  }
+};
+
+export const getOrCreateDefaultUserAndSender = async (senderEmail?: string, userId?: string) => {
+  if (userId) {
+    const sender = await getOrCreateSenderForUser(userId, senderEmail);
+    return { user: { id: userId }, sender };
+  }
   try {
     let user = await prisma.user.findFirst();
     if (!user) {
@@ -39,7 +76,7 @@ export const getOrCreateDefaultUserAndSender = async (senderEmail?: string) => {
 
     const emailToUse = senderEmail || 'sender@reachinbox.ai';
     let sender = await prisma.sender.findFirst({
-      where: { emailAddress: emailToUse },
+      where: { userId: user.id, emailAddress: emailToUse },
     });
 
     if (!sender) {
@@ -70,4 +107,5 @@ export const getOrCreateDefaultUserAndSender = async (senderEmail?: string) => {
     return { user, sender };
   }
 };
+
 

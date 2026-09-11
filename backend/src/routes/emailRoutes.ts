@@ -13,5 +13,6 @@ router.post('/schedule', upload.single('file'), EmailController.schedule);
 router.get('/scheduled', EmailController.getScheduled);
 router.get('/sent', EmailController.getSent);
 router.get('/search', EmailController.search);
+router.delete('/:id', EmailController.deleteJob);
 
 export default router;

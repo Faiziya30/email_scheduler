@@ -57,32 +57,43 @@ export class RateLimiterService {
     const key = this.getRateLimitKey(senderId);
     const { nextHourDate, delayUntilNextHourMs } = this.getNextHourDetails();
 
-    // Redis atomic increment
-    const currentCount = await redis.incr(key);
+    try {
+      // Redis atomic increment
+      const currentCount = await redis.incr(key);
 
-    // If this is the first item in this hourly bucket, set TTL for 2 hours (7200s)
-    if (currentCount === 1) {
-      await redis.expire(key, 7200);
-    }
+      // If this is the first item in this hourly bucket, set TTL for 2 hours (7200s)
+      if (currentCount === 1) {
+        await redis.expire(key, 7200);
+      }
 
-    if (currentCount > limit) {
-      // Hour cap exceeded: do not count this toward the current bucket
+      if (currentCount > limit) {
+        // Hour cap exceeded: do not count this toward the current bucket
+        return {
+          allowed: false,
+          currentCount,
+          limit,
+          nextHourDate,
+          delayUntilNextHourMs,
+        };
+      }
+
       return {
-        allowed: false,
+        allowed: true,
         currentCount,
         limit,
         nextHourDate,
         delayUntilNextHourMs,
       };
+    } catch (err: any) {
+      console.warn('⚠️ Redis rate limiter unreachable, using safe fallback:', err?.message);
+      return {
+        allowed: true,
+        currentCount: 1,
+        limit,
+        nextHourDate,
+        delayUntilNextHourMs: 0,
+      };
     }
-
-    return {
-      allowed: true,
-      currentCount,
-      limit,
-      nextHourDate,
-      delayUntilNextHourMs,
-    };
   }
 
   /**

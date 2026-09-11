@@ -5,10 +5,28 @@ import type { EmailJob } from '../types';
 interface EmailDetailModalProps {
   email: EmailJob | null;
   onClose: () => void;
+  onDelete?: (id: string) => Promise<void>;
 }
 
-export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({ email, onClose }) => {
+export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({ email, onClose, onDelete }) => {
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
   if (!email) return null;
+
+  const handleDelete = async () => {
+    if (!onDelete || isDeleting) return;
+    if (window.confirm('Are you sure you want to delete this email?')) {
+      setIsDeleting(true);
+      try {
+        await onDelete(email.id);
+        onClose();
+      } catch (err) {
+        console.error('Failed to delete email:', err);
+      } finally {
+        setIsDeleting(false);
+      }
+    }
+  };
 
   const isSent = email.status === 'SENT';
   const displayDate = email.sentAt
@@ -47,15 +65,22 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({ email, onClo
           </div>
 
           <div className="flex items-center gap-3 text-gray-400">
-            <button className="p-1.5 hover:text-amber-500 transition">
+            <button className="p-1.5 hover:text-amber-500 transition" title="Star">
               <Star className="h-4 w-4" />
             </button>
-            <button className="p-1.5 hover:text-gray-700 transition">
+            <button className="p-1.5 hover:text-gray-700 transition" title="Archive">
               <Archive className="h-4 w-4" />
             </button>
-            <button className="p-1.5 hover:text-red-600 transition">
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {onDelete && (
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="p-1.5 hover:text-red-600 hover:bg-red-50 rounded-lg transition text-gray-400 disabled:opacity-50"
+                title="Delete email"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 

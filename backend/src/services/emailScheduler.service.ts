@@ -26,7 +26,7 @@ export class EmailSchedulerService {
       throw new Error('Email subject and body are required');
     }
 
-    const { user, sender } = await getOrCreateDefaultUserAndSender(senderEmail);
+    const { user, sender } = await getOrCreateDefaultUserAndSender(senderEmail, userId);
     const activeUserId = userId || user.id;
 
     const startTimestamp = startTime ? new Date(startTime).getTime() : Date.now();
@@ -123,9 +123,12 @@ export class EmailSchedulerService {
     };
   }
 
-  public static async getScheduledEmails(limit = 100) {
+  public static async getScheduledEmails(limit = 100, userId?: string) {
     return prisma.emailJob.findMany({
-      where: { status: 'PENDING' },
+      where: {
+        status: 'PENDING',
+        ...(userId ? { userId } : {}),
+      },
       include: {
         sender: { select: { emailAddress: true } },
       },
@@ -134,10 +137,11 @@ export class EmailSchedulerService {
     });
   }
 
-  public static async getSentEmails(limit = 100) {
+  public static async getSentEmails(limit = 100, userId?: string) {
     return prisma.emailJob.findMany({
       where: {
         status: { in: ['SENT', 'FAILED'] },
+        ...(userId ? { userId } : {}),
       },
       include: {
         sender: { select: { emailAddress: true } },
@@ -145,5 +149,41 @@ export class EmailSchedulerService {
       orderBy: { sentAt: 'desc' },
       take: limit,
     });
+  }
+
+  public static async deleteEmailJob(id: string, userId?: string) {
+    const job = await prisma.emailJob.findFirst({
+      where: {
+        id,
+        ...(userId ? { userId } : {}),
+      },
+    });
+
+    if (!job) {
+      throw new Error('Email job not found or unauthorized');
+    }
+
+    // Attempt to remove job from BullMQ queue if still pending
+    if (job.bullJobId) {
+      try {
+        const bullJob = await emailQueue.getJob(job.bullJobId);
+        if (bullJob) {
+          await bullJob.remove();
+        }
+      } catch (err: any) {
+        console.warn(`Could not remove job ${job.bullJobId} from BullMQ:`, err?.message);
+      }
+    }
+
+    // Delete from Elasticsearch
+    const { esClient, EMAILS_INDEX } = require('./search.service');
+    esClient.delete({ index: EMAILS_INDEX, id: job.id }).catch(() => {});
+
+    // Delete from PostgreSQL
+    await prisma.emailJob.delete({
+      where: { id: job.id },
+    });
+
+    return { success: true, id: job.id };
   }
 }
