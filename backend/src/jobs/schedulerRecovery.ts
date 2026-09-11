@@ -3,15 +3,19 @@ import { sendEmail } from '../services/email.service';
 import { RateLimiterService } from '../services/rateLimiter.service';
 import { indexEmail } from '../services/search.service';
 
+let isRunningSweep = false;
+
 /**
  * Checks for any PENDING emails whose scheduledAt time has arrived,
  * and delivers them via Ethereal SMTP, updating PostgreSQL and Elasticsearch.
- * This guarantees resilience across server restarts, cold-starts, and queue pauses.
  */
 export const processPendingDueEmails = async (): Promise<void> => {
+  if (isRunningSweep) return;
+  isRunningSweep = true;
+
   try {
     const now = new Date();
-    // Fetch pending jobs whose scheduled time is due
+    // Fetch all pending jobs whose scheduled time has passed
     const dueJobs = await prisma.emailJob.findMany({
       where: {
         status: 'PENDING',
@@ -21,7 +25,7 @@ export const processPendingDueEmails = async (): Promise<void> => {
         sender: true,
       },
       orderBy: { scheduledAt: 'asc' },
-      take: 20,
+      take: 50,
     });
 
     if (dueJobs.length === 0) return;
@@ -85,9 +89,9 @@ export const processPendingDueEmails = async (): Promise<void> => {
           sentAt,
         }).catch(() => {});
 
-        console.log(`[Recovery Dispatcher] ✅ Email ${job.id} to ${job.recipient} SENT successfully | Preview: ${sendResult.previewUrl}`);
+        console.log(`[Dispatcher] ✅ Email ${job.id} to ${job.recipient} SENT successfully | Preview: ${sendResult.previewUrl}`);
       } catch (sendErr: any) {
-        console.error(`[Recovery Dispatcher] ❌ Email ${job.id} sending failed:`, sendErr?.message);
+        console.error(`[Dispatcher] ❌ Email ${job.id} sending failed:`, sendErr?.message);
         await prisma.emailJob.update({
           where: { id: job.id },
           data: { status: 'FAILED' },
@@ -105,7 +109,9 @@ export const processPendingDueEmails = async (): Promise<void> => {
       }
     }
   } catch (error: any) {
-    console.warn('[Recovery Dispatcher] Error during pending email dispatch:', error?.message);
+    console.warn('[Dispatcher] Error during pending email dispatch:', error?.message);
+  } finally {
+    isRunningSweep = false;
   }
 };
 
