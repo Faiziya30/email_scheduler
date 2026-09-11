@@ -3,8 +3,9 @@ import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../context';
 import { Spinner } from '../components/Loader';
 
-export const Login: React.FC = () => {
-  const { user, isLoading, isAuthenticated, login, emailLogin } = useAuth();
+export const Signup: React.FC = () => {
+  const { user, isLoading, isAuthenticated, login, signup } = useAuth();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [formLoading, setFormLoading] = useState(false);
@@ -15,7 +16,7 @@ export const Login: React.FC = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
     setErrorMsg(null);
@@ -26,10 +27,17 @@ export const Login: React.FC = () => {
       return;
     }
 
+    if (password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters.');
+      setFormLoading(false);
+      return;
+    }
+
     try {
-      await emailLogin(email.trim(), password);
+      await signup(email.trim(), password, name.trim() || undefined);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Invalid email or password.');
+      const msg = err?.message || 'Signup failed. Please try again.';
+      setErrorMsg(msg);
     } finally {
       setFormLoading(false);
     }
@@ -48,11 +56,11 @@ export const Login: React.FC = () => {
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-white px-4 py-12">
-      {/* Centered Login Card matching Figma Image 1 */}
+      {/* Centered Signup Card — same aesthetic as Login */}
       <div className="w-full max-w-[400px] rounded-2xl border border-gray-200/80 p-8 sm:p-10 shadow-[0_4px_25px_rgba(0,0,0,0.03)] bg-white">
         {/* Title */}
         <h1 className="text-2xl font-bold text-center text-gray-900 tracking-tight mb-7">
-          Login
+          Create Account
         </h1>
 
         {errorMsg && (
@@ -63,7 +71,7 @@ export const Login: React.FC = () => {
 
         {/* 1. Google OAuth Button matching Figma's mint background */}
         <button
-          id="google-login-button"
+          id="google-signup-button"
           type="button"
           onClick={login}
           className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl bg-[#E8F5E9] hover:bg-[#DCFCE7] active:scale-[0.99] text-sm font-medium text-gray-800 transition-all shadow-none border border-[#C8E6C9]"
@@ -87,26 +95,37 @@ export const Login: React.FC = () => {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span>Login with Google</span>
+          <span>Sign up with Google</span>
         </button>
 
-        {/* Divider: or login with email */}
+        {/* Divider */}
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-150" />
           </div>
           <div className="relative flex justify-center text-xs">
             <span className="bg-white px-3 text-gray-400 font-normal">
-              or login with email
+              or sign up with email
             </span>
           </div>
         </div>
 
-        {/* Email & Password Form */}
-        <form onSubmit={handleEmailLogin} className="space-y-3.5">
+        {/* Name, Email & Password Form */}
+        <form onSubmit={handleSignup} className="space-y-3.5">
           <div>
             <input
-              id="email-input"
+              id="signup-name-input"
+              type="text"
+              placeholder="Full Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-xl bg-[#F3F4F6] border-0 px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00A854]/40 transition"
+            />
+          </div>
+
+          <div>
+            <input
+              id="signup-email-input"
               type="email"
               placeholder="Email ID"
               value={email}
@@ -118,35 +137,36 @@ export const Login: React.FC = () => {
 
           <div>
             <input
-              id="password-input"
+              id="signup-password-input"
               type="password"
-              placeholder="Password"
+              placeholder="Password (min. 6 characters)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={6}
               className="w-full rounded-xl bg-[#F3F4F6] border-0 px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00A854]/40 transition"
             />
           </div>
 
-          {/* Solid Green Login Button */}
+          {/* Solid Green Signup Button */}
           <button
-            id="submit-login-btn"
+            id="submit-signup-btn"
             type="submit"
             disabled={formLoading}
             className="w-full py-3 px-4 rounded-xl bg-[#00A854] hover:bg-[#009249] active:scale-[0.99] text-white font-medium text-sm transition-all shadow-none flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-70"
           >
-            {formLoading ? <Spinner size="sm" color="border-white" /> : 'Login'}
+            {formLoading ? <Spinner size="sm" color="border-white" /> : 'Create Account'}
           </button>
         </form>
 
-        {/* Link to Signup */}
+        {/* Link to Login */}
         <p className="text-center text-xs text-gray-400 mt-6">
-          Don't have an account?{' '}
+          Already have an account?{' '}
           <Link
-            to="/signup"
+            to="/login"
             className="text-[#00A854] hover:text-[#009249] font-medium transition-colors"
           >
-            Create Account
+            Login
           </Link>
         </p>
       </div>
@@ -154,5 +174,4 @@ export const Login: React.FC = () => {
   );
 };
 
-export default Login;
-
+export default Signup;

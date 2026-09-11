@@ -1,5 +1,6 @@
 import { Client } from '@elastic/elasticsearch';
 import { env } from '../config/env';
+import { prisma } from '../models';
 
 export const esClient = new Client({
   node: env.ELASTICSEARCH_NODE,
@@ -64,7 +65,7 @@ export const initElasticsearchIndex = async (): Promise<void> => {
       console.log(`🔍 Elasticsearch index '${EMAILS_INDEX}' is ready.`);
     }
   } catch (error: any) {
-    console.error('❌ Failed to initialize Elasticsearch index:', error.message);
+    console.warn('⚠️ Elasticsearch not reachable. Search will use PostgreSQL fallback:', error.message);
   }
 };
 
@@ -91,12 +92,13 @@ export const indexEmail = async (email: EmailDocument): Promise<void> => {
     });
     console.log(`🔍 Indexed email ${email.id} into Elasticsearch (status: ${email.status})`);
   } catch (error: any) {
-    console.error(`❌ Failed to index email ${email.id} into Elasticsearch:`, error.message);
+    console.warn(`⚠️ Skipping Elasticsearch indexing for email ${email.id} (service offline)`);
   }
 };
 
 /**
- * Searches emails in Elasticsearch matching subject or recipient.
+ * Searches emails in Elasticsearch matching subject, recipient, or body.
+ * Seamlessly falls back to PostgreSQL ILIKE query if Elasticsearch is offline.
  */
 export const searchEmails = async (queryText: string, userId?: string) => {
   try {
@@ -150,7 +152,38 @@ export const searchEmails = async (queryText: string, userId?: string) => {
       ...(hit._source as EmailDocument),
     }));
   } catch (error: any) {
-    console.error('❌ Failed to query Elasticsearch:', error.message);
-    throw error;
+    console.warn('⚠️ Elasticsearch query failed, using PostgreSQL database search fallback...');
+    
+    // Database fallback
+    try {
+      const dbResults = await prisma.emailJob.findMany({
+        where: {
+          ...(userId ? { userId } : {}),
+          OR: [
+            { recipient: { contains: queryText, mode: 'insensitive' } },
+            { subject: { contains: queryText, mode: 'insensitive' } },
+            { body: { contains: queryText, mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { scheduledAt: 'desc' },
+        take: 50,
+      });
+
+      return dbResults.map((job) => ({
+        _id: job.id,
+        id: job.id,
+        userId: job.userId,
+        recipient: job.recipient,
+        subject: job.subject,
+        body: job.body,
+        status: job.status,
+        scheduledAt: job.scheduledAt,
+        sentAt: job.sentAt,
+      }));
+    } catch (dbErr: any) {
+      console.error('❌ Database search fallback also failed:', dbErr.message);
+      return [];
+    }
   }
 };
+

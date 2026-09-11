@@ -9,6 +9,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   login: () => void;
   devLogin: () => Promise<void>;
+  emailLogin: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   refetchUser: () => Promise<any>;
 }
@@ -47,6 +49,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     queryClient.setQueryData(['auth', 'me'], loggedInUser);
   }, [queryClient]);
 
+  const emailLogin = useCallback(async (email: string, password: string) => {
+    const loggedInUser = await authApi.emailLogin(email, password);
+    queryClient.setQueryData(['auth', 'me'], loggedInUser);
+  }, [queryClient]);
+
+  const signup = useCallback(async (email: string, password: string, name?: string) => {
+    const newUser = await authApi.signup(email, password, name);
+    queryClient.setQueryData(['auth', 'me'], newUser);
+  }, [queryClient]);
+
   const logout = useCallback(async () => {
     try {
       await apiLogout();
@@ -69,6 +81,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated,
         login,
         devLogin,
+        emailLogin,
+        signup,
         logout,
         refetchUser,
       }}
@@ -85,3 +99,4 @@ export const useAuth = (): AuthContextValue => {
   }
   return ctx;
 };
+

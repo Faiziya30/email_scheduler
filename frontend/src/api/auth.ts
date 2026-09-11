@@ -6,6 +6,13 @@ export interface DevTokenResponse extends ApiSuccess<User> {
   user: User;
 }
 
+export interface AuthResponse {
+  status: string;
+  token: string;
+  user: User;
+  message?: string;
+}
+
 export const authApi = {
   /**
    * Fetch current authenticated user's profile
@@ -35,6 +42,30 @@ export const authApi = {
   },
 
   /**
+   * Register a new user with email + password
+   */
+  signup: async (email: string, password: string, name?: string): Promise<User> => {
+    const res = await apiClient<AuthResponse>('/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name }),
+    });
+    return res.user;
+  },
+
+  /**
+   * Login with email + password
+   */
+  emailLogin: async (email: string, password: string): Promise<User> => {
+    const res = await apiClient<AuthResponse>('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    return res.user;
+  },
+
+  /**
    * Full page redirect URL for Google OAuth consent screen
    */
   getGoogleAuthUrl: (): string => {
@@ -43,3 +74,4 @@ export const authApi = {
 };
 
 export const { getMe, logout, devToken, getGoogleAuthUrl } = authApi;
+

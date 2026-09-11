@@ -24,6 +24,10 @@ router.get(
   AuthController.googleCallback,
 );
 
+// Email/Password Signup & Login
+router.post('/signup', AuthController.signup);
+router.post('/login', AuthController.emailLogin);
+
 // Authenticated session checks
 router.get('/me', authGuard, AuthController.getMe);
 router.post('/logout', AuthController.logout);
@@ -32,3 +36,4 @@ router.post('/logout', AuthController.logout);
 router.post('/dev-token', AuthController.devToken);
 
 export default router;
+

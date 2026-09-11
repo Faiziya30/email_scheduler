@@ -15,10 +15,11 @@ enum EmailStatus {
 
 model User {
   id                String             @id @default(uuid())
-  googleId          String             @unique
+  googleId          String?            @unique
   email             String             @unique
   name              String?
   avatarUrl         String?
+  password          String?
   createdAt         DateTime           @default(now())
   senders           Sender[]
   slackIntegrations SlackIntegration[]
