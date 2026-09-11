@@ -45,7 +45,7 @@ export class AuthController {
     res.clearCookie('token', {
       httpOnly: true,
       secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
     });
 
     res.status(200).json({
@@ -53,6 +53,7 @@ export class AuthController {
       message: 'Logged out successfully',
     });
   }
+
 
   /**
    * Register a new user with email + password.

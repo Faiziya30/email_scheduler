@@ -86,11 +86,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ignore network failure on logout
     } finally {
       localStorage.removeItem('auth_token');
+      sessionStorage.clear();
       queryClient.setQueryData(['auth', 'me'], null);
+      queryClient.removeQueries({ queryKey: ['auth', 'me'] });
       queryClient.clear();
-      window.location.href = '/login';
+      window.location.replace('/login');
     }
   }, [queryClient]);
+
 
   const isAuthenticated = Boolean(user && user.id);
 

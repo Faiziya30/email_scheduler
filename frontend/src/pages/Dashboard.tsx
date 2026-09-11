@@ -156,7 +156,7 @@ export const Dashboard: React.FC = () => {
             {userMenuOpen && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 z-30 text-xs text-gray-700">
                 <a
-                  href="http://localhost:5000/admin/queues"
+                  href={`${(import.meta.env.VITE_API_BASE_URL || 'https://reachinbox-backend-vvu3.onrender.com/api').replace(/\/api$/, '')}/admin/queues`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 transition"
@@ -165,14 +165,20 @@ export const Dashboard: React.FC = () => {
                   <ExternalLink className="h-3 w-3 text-gray-400" />
                 </a>
                 <button
-                  onClick={logout}
-                  className="w-full flex items-center gap-2 p-2 rounded-lg text-red-600 hover:bg-red-50 transition"
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setUserMenuOpen(false);
+                    await logout();
+                  }}
+                  className="w-full flex items-center gap-2 p-2 rounded-lg text-red-600 hover:bg-red-50 transition cursor-pointer text-left"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                   <span>Logout</span>
                 </button>
               </div>
             )}
+
           </div>
 
           {/* Primary Action Button: "Compose" with green outline pill */}
