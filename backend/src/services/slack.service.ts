@@ -26,20 +26,43 @@ export const handleSlackCallback = async (code: string, userId: string) => {
       throw new Error(`Slack OAuth error: ${response.error || 'Unknown error'}`);
     }
 
-    const integration = await prisma.slackIntegration.upsert({
-      where: { id: userId }, // or look up by userId
-      create: {
-        userId,
-        accessToken: response.access_token,
-        teamId: response.team?.id,
-        webhookUrl: (response as any).incoming_webhook?.url,
-      },
-      update: {
-        accessToken: response.access_token,
-        teamId: response.team?.id,
-        webhookUrl: (response as any).incoming_webhook?.url,
-      },
+    const existing = await prisma.slackIntegration.findFirst({
+      where: { userId },
     });
+
+    let integration;
+    if (existing) {
+      integration = await prisma.slackIntegration.update({
+        where: { id: existing.id },
+        data: {
+          accessToken: response.access_token,
+          teamId: response.team?.id,
+          webhookUrl: (response as any).incoming_webhook?.url,
+        },
+      });
+    } else {
+      integration = await prisma.slackIntegration.create({
+        data: {
+          userId,
+          accessToken: response.access_token,
+          teamId: response.team?.id,
+          webhookUrl: (response as any).incoming_webhook?.url,
+        },
+      });
+    }
+
+    // Post an immediate live confirmation message into Slack
+    try {
+      const postClient = new WebClient(response.access_token);
+      const targetChannel = (response as any).incoming_webhook?.channel_id || '#general';
+      await postClient.chat.postMessage({
+        channel: targetChannel,
+        text: '🎉 *ReachInbox Scheduler Connected!* Your Slack workspace is now integrated and will receive real-time email rate-limit alerts.',
+      });
+      console.log('✅ Instant Slack welcome message sent to', targetChannel);
+    } catch (msgErr: any) {
+      console.warn('⚠️ Welcome message posting note:', msgErr.message);
+    }
 
     return integration;
   } catch (error: any) {
@@ -47,6 +70,7 @@ export const handleSlackCallback = async (code: string, userId: string) => {
     throw error;
   }
 };
+
 
 export const notifySlackRateLimitHit = async (
   userId: string,
