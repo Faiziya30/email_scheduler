@@ -321,23 +321,18 @@ Ethereal is a fake SMTP service used for development testing that captures outgo
 
 ## Deliverable Checklist
 
-- [x] **Monorepo Layout**: Clean separation into `backend/`, `frontend/`, and root `docker-compose.yml`.
-- [x] **Strict MVC Architecture**: Thin controllers, isolated services, models, and BullMQ worker processors.
-- [x] **No Cron / Pure BullMQ Scheduling**: Scheduling implemented via BullMQ delayed sorted sets, no `node-cron` or OS cron.
-- [x] **Process Restart Persistence**: Verified across server restarts — Redis preserves delayed jobs without loss or duplication.
-- [x] **Strict Idempotency**: Deterministic job keys (`email-job-<uuid>`) prevent duplicate sends under retries.
-- [x] **Configurable Worker Concurrency**: Driven by `WORKER_CONCURRENCY` env variable.
-- [x] **Global Min-Delay Throttle**: Worker throttled via BullMQ `limiter` using `MIN_DELAY_MS_BETWEEN_SENDS`.
-- [x] **Atomic Redis Hourly Cap Per Sender**: Race-condition free unconditional `INCR`-first pattern with 2-hour TTL.
-- [x] **Order-Preserving Next-Hour Rescheduling**: Over-limit jobs are deferred to the next hour with deterministic stagger offsets.
-- [x] **Real-Time Slack Alerts**: Posts via Slack Web API upon quota breach; silently no-ops when disconnected.
-- [x] **Elasticsearch Full-Text Search**: Indexed on `PENDING`, `SENT`, and `FAILED` transitions with multi-match search endpoint.
-- [x] **Bull Board Monitoring**: Express dashboard mounted at `/admin/queues` for live queue observability.
-- [x] **Google OAuth 2.0 + JWT Cookies**: Secure `httpOnly` JWT session management with dev quick-login bypass.
-- [x] **Modern React + Vite Frontend**: Styled with Tailwind CSS, fully responsive, matching Figma visual guidelines.
-- [x] **Client-Side CSV Parsing**: Real-time recipient detection and validation using PapaParse with live count indicators.
-- [x] **Interactive Tables & Skeletons**: Scheduled and Sent tables with loading skeletons, auto-refresh polling, and empty states.
-- [x] **Toast Notifications**: Feedback on every network action and validation error.
+- [x] **Scheduling via BullMQ delayed jobs, no cron**: BullMQ delayed queue with Redis persistence, zero OS or Node cron.
+- [x] **Persists across restart, no duplicate/lost sends**: Redis persists delayed jobs; BullMQ resumes timers without duplicate execution.
+- [x] **Configurable worker concurrency**: Managed by `WORKER_CONCURRENCY` env variable.
+- [x] **Configurable min delay between sends**: Enforced by BullMQ worker `limiter` using `MIN_DELAY_MS_BETWEEN_SENDS`.
+- [x] **Configurable per-sender hourly limit, Redis-backed, safe across workers**: Race-condition free atomic `INCR`-first pattern keyed by `rate:{senderId}:{hour}`.
+- [x] **Over-limit jobs rescheduled (not dropped), order preserved**: Jobs exceeding cap are staggered into the next hour window preserving relative sequence.
+- [x] **Elasticsearch indexing + search endpoint**: Real-time upsert into `emails` index with `GET /api/emails/search?q=...`.
+- [x] **Live Bull Board dashboard**: Mounted at `http://localhost:5000/admin/queues` for live queue observability.
+- [x] **Real Google OAuth login**: Google OAuth 2.0 with session JWT cookies and `/api/auth/me`.
+- [x] **Real Slack OAuth + live notification on rate-limit hit, with graceful no-op if not connected**: Posts live alert via Slack Web API; safely skips when disconnected.
+- [x] **Frontend matches Figma**: Light theme, ONB sidebar, Scheduled & Sent tabs, Compose with leads upload, Send Later popover, attachments, and tables.
+- [x] **Clean MVC structure, typed throughout, no dead code**: Strict separation of concerns across controllers, services, models, and routes with zero compilation errors.
 
 ---
 
