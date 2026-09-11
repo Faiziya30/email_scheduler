@@ -51,5 +51,6 @@ databases:
   - name: reachinbox-postgres
     plan: free
     databaseName: reachinbox
-    user: postgres
+    user: reachinbox_user
+
 
