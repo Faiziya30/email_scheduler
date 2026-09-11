@@ -3,7 +3,7 @@ services:
   - type: web
     name: reachinbox-backend
     env: node
-    plan: starter
+    plan: free
     rootDir: backend
     buildCommand: npm install && npm run build
     startCommand: npx prisma db push && npm run start
@@ -18,14 +18,11 @@ services:
           name: reachinbox-postgres
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: reachinbox-redis
-          property: connectionString
+        sync: false # Enter your Redis URL (e.g., from Upstash Redis or Render Redis)
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://reachinbox-frontend.onrender.com # Update with your frontend Render URL
+        value: https://reachinbox-frontend.onrender.com # Update once frontend is provisioned
       - key: WORKER_CONCURRENCY
         value: 5
       - key: MIN_DELAY_MS_BETWEEN_SENDS
@@ -37,7 +34,7 @@ services:
   - type: web
     name: reachinbox-frontend
     env: static
-    plan: starter
+    plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -47,14 +44,12 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://reachinbox-backend.onrender.com/api # Update with your backend Render URL
+        value: https://reachinbox-backend.onrender.com/api # Update once backend is provisioned
 
-# ── Managed Databases ───────────────────────────────────────────────────────
+# ── Managed PostgreSQL Database ─────────────────────────────────────────────
 databases:
   - name: reachinbox-postgres
-    plan: starter
+    plan: free
     databaseName: reachinbox
     user: postgres
 
-# ── Managed Redis Cache & Queue ─────────────────────────────────────────────
-# Note: On Render free/starter tiers, create a Redis instance or use Upstash Redis (free)
