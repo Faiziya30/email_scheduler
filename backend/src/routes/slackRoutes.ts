@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { getSlackAuthorizeUrl, handleSlackCallback } from '../services/slack.service';
+import { getSlackAuthorizeUrl, handleSlackCallback, notifySlackRateLimitHit } from '../services/slack.service';
 import { getOrCreateDefaultUserAndSender } from '../models/userHelper';
+import { prisma } from '../models';
 import { env } from '../config/env';
 
 const router = Router();
@@ -33,5 +34,65 @@ router.get('/callback', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Returns current Slack connection status
+ */
+router.get('/status', async (req: Request, res: Response) => {
+  try {
+    let userId = (req as any).user?.id;
+    if (!userId) {
+      const { user } = await getOrCreateDefaultUserAndSender();
+      userId = user.id;
+    }
+
+    const integration = await prisma.slackIntegration.findFirst({
+      where: { userId },
+    });
+
+    const isConnected = Boolean(integration && integration.accessToken && !integration.accessToken.startsWith('mock_'));
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        connected: isConnected,
+        teamId: integration?.teamId,
+      },
+    });
+  } catch (error: any) {
+    res.status(200).json({
+      status: 'success',
+      data: { connected: false },
+    });
+  }
+});
+
+/**
+ * Trigger a test rate-limit alert message to Slack
+ */
+router.post('/test', async (req: Request, res: Response) => {
+  try {
+    let userId = (req as any).user?.id;
+    if (!userId) {
+      const { user } = await getOrCreateDefaultUserAndSender();
+      userId = user.id;
+    }
+
+    const testSender = 'faiziya@reachinbox.ai';
+    const nextHour = new Date(Date.now() + 3600000);
+    await notifySlackRateLimitHit(userId, testSender, 5, nextHour);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Test rate-limit alert dispatched to Slack channel',
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message,
+    });
+  }
+});
+
 export default router;
+
 

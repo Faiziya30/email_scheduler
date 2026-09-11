@@ -60,11 +60,40 @@ export const Dashboard: React.FC = () => {
   });
 
   // ── Slack Status Query ───────────────────────────────────────────────────
-  const { data: slackStatus } = useQuery({
+  const { data: slackStatus, refetch: refetchSlack } = useQuery({
     queryKey: ['slack', 'status'],
     queryFn: getSlackStatus,
-    staleTime: 60_000,
+    refetchInterval: 10_000,
   });
+
+  // Handle ?slack=connected redirect parameter from Slack OAuth
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('slack') === 'connected') {
+      refetchSlack();
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  }, [refetchSlack]);
+
+  const [testingSlack, setTestingSlack] = useState(false);
+  const handleTestSlackAlert = async () => {
+    setTestingSlack(true);
+    try {
+      await fetch(`${(import.meta.env.VITE_API_BASE_URL || 'https://reachinbox-backend-vvu3.onrender.com/api')}/slack/test`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+        },
+      });
+      alert('🚀 Test rate-limit alert sent to your Slack channel!');
+    } catch {
+      alert('Could not dispatch test alert.');
+    } finally {
+      setTestingSlack(false);
+    }
+  };
+
 
   const scheduledCount = scheduledJobs?.length ?? 0;
   const sentCount = sentJobs?.length ?? 0;
@@ -245,9 +274,22 @@ export const Dashboard: React.FC = () => {
         {/* Sidebar Footer: Slack Integration Status */}
         <div className="pt-4 border-t border-gray-150 space-y-2">
           {slackStatus?.connected ? (
-            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] font-medium text-emerald-700">
-              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">Slack Connected</span>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] font-medium text-emerald-700">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0"></span>
+                  <span className="truncate">Slack Connected</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleTestSlackAlert}
+                disabled={testingSlack}
+                className="w-full py-1 px-2 rounded-lg bg-gray-50 hover:bg-gray-100 active:scale-[0.99] border border-gray-200 text-[10px] font-medium text-gray-700 transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                <MessageSquare className="h-3 w-3 text-[#E01E5A]" />
+                <span>{testingSlack ? 'Sending...' : 'Send Test Alert 🚀'}</span>
+              </button>
             </div>
           ) : (
             <a
@@ -260,6 +302,7 @@ export const Dashboard: React.FC = () => {
             </a>
           )}
         </div>
+
       </aside>
 
       {/* ───────────────────────────────────────────────────────────────────
