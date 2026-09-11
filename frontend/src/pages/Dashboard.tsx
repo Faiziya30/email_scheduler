@@ -76,24 +76,6 @@ export const Dashboard: React.FC = () => {
     }
   }, [refetchSlack]);
 
-  const [testingSlack, setTestingSlack] = useState(false);
-  const handleTestSlackAlert = async () => {
-    setTestingSlack(true);
-    try {
-      await fetch(`${(import.meta.env.VITE_API_BASE_URL || 'https://reachinbox-backend-vvu3.onrender.com/api')}/slack/test`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-        },
-      });
-      alert('🚀 Test rate-limit alert sent to your Slack channel!');
-    } catch {
-      alert('Could not dispatch test alert.');
-    } finally {
-      setTestingSlack(false);
-    }
-  };
-
 
   const scheduledCount = scheduledJobs?.length ?? 0;
   const sentCount = sentJobs?.length ?? 0;
