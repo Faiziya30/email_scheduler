@@ -15,16 +15,14 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({ email, onClo
 
   const handleDelete = async () => {
     if (!onDelete || isDeleting) return;
-    if (window.confirm('Are you sure you want to delete this email?')) {
-      setIsDeleting(true);
-      try {
-        await onDelete(email.id);
-        onClose();
-      } catch (err) {
-        console.error('Failed to delete email:', err);
-      } finally {
-        setIsDeleting(false);
-      }
+    setIsDeleting(true);
+    try {
+      await onDelete(email.id);
+      onClose();
+    } catch (err) {
+      console.error('Failed to delete email:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 

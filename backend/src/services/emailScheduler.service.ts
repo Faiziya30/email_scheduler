@@ -152,15 +152,12 @@ export class EmailSchedulerService {
   }
 
   public static async deleteEmailJob(id: string, userId?: string) {
-    const job = await prisma.emailJob.findFirst({
-      where: {
-        id,
-        ...(userId ? { userId } : {}),
-      },
+    const job = await prisma.emailJob.findUnique({
+      where: { id },
     });
 
     if (!job) {
-      throw new Error('Email job not found or unauthorized');
+      throw new Error('Email job not found');
     }
 
     // Attempt to remove job from BullMQ queue if still pending
@@ -175,9 +172,11 @@ export class EmailSchedulerService {
       }
     }
 
-    // Delete from Elasticsearch
-    const { esClient, EMAILS_INDEX } = require('./search.service');
-    esClient.delete({ index: EMAILS_INDEX, id: job.id }).catch(() => {});
+    // Delete from Elasticsearch (non-blocking)
+    try {
+      const { esClient, EMAILS_INDEX } = require('./search.service');
+      esClient.delete({ index: EMAILS_INDEX, id: job.id }).catch(() => {});
+    } catch {}
 
     // Delete from PostgreSQL
     await prisma.emailJob.delete({

@@ -13,6 +13,7 @@ import {
   ChevronDown,
   CheckCircle2,
   X,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../context';
 import { useToast } from '../context/ToastContext';
@@ -439,8 +440,19 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Right Column: Star Icon */}
-                  <div className="shrink-0 pl-3 text-gray-300 group-hover:text-gray-400">
+                  {/* Right Column: Actions (Delete on hover + Star) */}
+                  <div className="shrink-0 pl-3 flex items-center gap-1.5 text-gray-300 group-hover:text-gray-400">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteEmail(job.id);
+                      }}
+                      className="p-1 hover:text-red-500 hover:bg-red-50 rounded-md transition opacity-0 group-hover:opacity-100"
+                      title="Delete email"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => toggleStar(job.id, e)}
