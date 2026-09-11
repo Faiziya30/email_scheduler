@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -10,9 +10,8 @@
   }
 
   body {
-    @apply bg-slate-950 text-slate-50 antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    font-feature-settings: 'cv11', 'ss01';
+    @apply bg-white text-gray-900 antialiased;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -25,10 +24,10 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-slate-700 rounded-full;
+    @apply bg-gray-300 rounded-full;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-600;
+    @apply bg-gray-400;
   }
 
   /* Remove default search input clear button */
@@ -38,10 +37,13 @@
 }
 
 @layer utilities {
-  .glass {
-    @apply bg-slate-900/70 backdrop-blur-md border border-slate-800;
+  .outbox-green {
+    color: #00A854;
   }
-  .text-gradient {
-    @apply bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent;
+  .bg-outbox-green {
+    background-color: #00A854;
+  }
+  .border-outbox-green {
+    border-color: #00A854;
   }
 }
