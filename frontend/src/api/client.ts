@@ -43,9 +43,11 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
   }
 
   const isFormData = restOptions.body instanceof FormData;
+  const authToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
 
   const requestHeaders: Record<string, string> = {
     ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...((headers as Record<string, string>) || {}),
   };
 
@@ -54,6 +56,7 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     headers: requestHeaders,
     ...restOptions,
   });
+
 
   let data: any = null;
   const contentType = response.headers.get('content-type');

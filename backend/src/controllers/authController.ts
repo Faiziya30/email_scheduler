@@ -16,7 +16,7 @@ export class AuthController {
     res.cookie('token', token, {
       httpOnly: true,
       secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -29,9 +29,10 @@ export class AuthController {
       return;
     }
 
-    AuthController.issueTokenAndSetCookie(res, req.user);
-    res.redirect(`${env.FRONTEND_URL}/dashboard`);
+    const token = AuthController.issueTokenAndSetCookie(res, req.user);
+    res.redirect(`${env.FRONTEND_URL}/dashboard?token=${encodeURIComponent(token)}`);
   }
+
 
   public static async getMe(req: Request, res: Response) {
     res.status(200).json({

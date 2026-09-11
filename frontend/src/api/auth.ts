@@ -44,26 +44,27 @@ export const authApi = {
   /**
    * Register a new user with email + password
    */
-  signup: async (email: string, password: string, name?: string): Promise<User> => {
+  signup: async (email: string, password: string, name?: string): Promise<AuthResponse> => {
     const res = await apiClient<AuthResponse>('/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, name }),
     });
-    return res.user;
+    return res;
   },
 
   /**
    * Login with email + password
    */
-  emailLogin: async (email: string, password: string): Promise<User> => {
+  emailLogin: async (email: string, password: string): Promise<AuthResponse> => {
     const res = await apiClient<AuthResponse>('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    return res.user;
+    return res;
   },
+
 
   /**
    * Full page redirect URL for Google OAuth consent screen

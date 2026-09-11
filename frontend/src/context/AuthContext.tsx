@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback } from 'react';
+import React, { createContext, useContext, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from '../types';
 import { getMe, logout as apiLogout, devToken as apiDevToken, authApi } from '../api/auth';
@@ -19,6 +19,20 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const queryClient = useQueryClient();
+
+  // Intercept Google OAuth redirect URL query parameter (?token=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    if (tokenFromUrl) {
+      localStorage.setItem('auth_token', tokenFromUrl);
+      // Clean up the URL parameter cleanly
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+    }
+  }, [queryClient]);
 
   // Query /auth/me on mount with React Query
   const {
@@ -50,13 +64,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [queryClient]);
 
   const emailLogin = useCallback(async (email: string, password: string) => {
-    const loggedInUser = await authApi.emailLogin(email, password);
-    queryClient.setQueryData(['auth', 'me'], loggedInUser);
+    const res = await authApi.emailLogin(email, password);
+    if (res.token) {
+      localStorage.setItem('auth_token', res.token);
+    }
+    queryClient.setQueryData(['auth', 'me'], res.user);
   }, [queryClient]);
 
   const signup = useCallback(async (email: string, password: string, name?: string) => {
-    const newUser = await authApi.signup(email, password, name);
-    queryClient.setQueryData(['auth', 'me'], newUser);
+    const res = await authApi.signup(email, password, name);
+    if (res.token) {
+      localStorage.setItem('auth_token', res.token);
+    }
+    queryClient.setQueryData(['auth', 'me'], res.user);
   }, [queryClient]);
 
   const logout = useCallback(async () => {
@@ -65,6 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // ignore network failure on logout
     } finally {
+      localStorage.removeItem('auth_token');
       queryClient.setQueryData(['auth', 'me'], null);
       queryClient.clear();
       window.location.href = '/login';
@@ -91,6 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
+
 
 export const useAuth = (): AuthContextValue => {
   const ctx = useContext(AuthContext);
