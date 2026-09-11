@@ -16,7 +16,7 @@ import {
   Quote,
   Link as LinkIcon,
   X,
-  Plus,
+  FileText,
 } from 'lucide-react';
 import { scheduleEmail } from '../api/emails';
 import { useToast } from '../context/ToastContext';
@@ -31,6 +31,15 @@ interface ComposeModalProps {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+interface AttachedFile {
+  id: string;
+  file: File;
+  name: string;
+  sizeFormatted: string;
+  isImage: boolean;
+  previewUrl?: string;
+}
+
 export const ComposeModal: React.FC<ComposeModalProps> = ({
   isOpen,
   onClose,
@@ -38,14 +47,17 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   userEmail = 'sender@reachinbox.ai',
 }) => {
   const toast = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const leadsFileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   // Form states
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [recipients, setRecipients] = useState<string[]>(['candidate@example.com']);
+  const [recipients, setRecipients] = useState<string[]>([]);
   const [newRecipientInput, setNewRecipientInput] = useState('');
-  const [isAddingRecipient, setIsAddingRecipient] = useState(false);
+
+  // Attachments (PDFs, Images, Word docs, etc.)
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
 
   // Scheduling options
   const defaultStartTime = new Date(Date.now() + 60 * 1000).toISOString().slice(0, 16);
@@ -59,8 +71,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle CSV / TXT file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 1. Leads list upload (CSV / TXT)
+  const handleLeadsFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -88,14 +100,14 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
         });
 
         if (detectedEmails.length === 0) {
-          toast.error('No valid email addresses detected in this file.');
+          toast.error('No valid email addresses detected in this CSV/TXT file.');
         } else {
           // Merge unique emails
           const merged = Array.from(new Set([...recipients, ...detectedEmails]));
           setRecipients(merged);
           toast.success(
-            `Imported ${detectedEmails.length} recipient(s) from "${file.name}"`,
-            'Leads Uploaded'
+            `Imported ${detectedEmails.length} recipient lead(s) from "${file.name}"`,
+            'Leads List Uploaded'
           );
         }
       },
@@ -104,19 +116,58 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
       },
     });
 
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (leadsFileInputRef.current) leadsFileInputRef.current.value = '';
   };
 
-  const handleAddRecipient = () => {
-    const trimmed = newRecipientInput.trim();
-    if (trimmed && EMAIL_REGEX.test(trimmed)) {
-      if (!recipients.includes(trimmed)) {
-        setRecipients([...recipients, trimmed]);
+  // 2. Email Attachments upload (PDF, PNG, JPG, DOC, etc.)
+  const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newAttachments: AttachedFile[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      const isImage = file.type.startsWith('image/');
+
+      newAttachments.push({
+        id: `${file.name}-${Date.now()}-${i}`,
+        file,
+        name: file.name,
+        sizeFormatted: file.size < 1024 * 1024 ? `${Math.round(file.size / 1024)} KB` : `${sizeMB} MB`,
+        isImage,
+        previewUrl: isImage ? URL.createObjectURL(file) : undefined,
+      });
+    }
+
+    setAttachments((prev) => [...prev, ...newAttachments]);
+    toast.info(`Attached ${newAttachments.length} file(s) to email.`, 'Attachment Added');
+
+    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((att) => att.id !== id));
+  };
+
+  const addCurrentInputAsRecipient = () => {
+    const trimmed = newRecipientInput.trim().replace(/,$/, '');
+    if (trimmed) {
+      if (EMAIL_REGEX.test(trimmed)) {
+        if (!recipients.includes(trimmed)) {
+          setRecipients((prev) => [...prev, trimmed]);
+        }
+        setNewRecipientInput('');
+      } else {
+        toast.error(`"${trimmed}" is not a valid email address.`);
       }
-      setNewRecipientInput('');
-      setIsAddingRecipient(false);
-    } else if (trimmed) {
-      toast.error('Please enter a valid email address.');
+    }
+  };
+
+  const handleRecipientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+      e.preventDefault();
+      addCurrentInputAsRecipient();
     }
   };
 
@@ -127,8 +178,17 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (recipients.length === 0) {
-      toast.error('Please add at least one recipient or upload a leads list.');
+    // Auto-commit any typed recipient if user forgot to press Enter
+    let finalRecipients = [...recipients];
+    const pendingInput = newRecipientInput.trim().replace(/,$/, '');
+    if (pendingInput && EMAIL_REGEX.test(pendingInput) && !finalRecipients.includes(pendingInput)) {
+      finalRecipients.push(pendingInput);
+      setRecipients(finalRecipients);
+      setNewRecipientInput('');
+    }
+
+    if (finalRecipients.length === 0) {
+      toast.error('Please enter at least one recipient email address or upload a leads list.');
       return;
     }
 
@@ -147,7 +207,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
       await scheduleEmail({
         subject: subject.trim(),
         body: body.trim(),
-        recipients,
+        recipients: finalRecipients,
         senderEmail: userEmail,
         startTime: startTime ? new Date(startTime).toISOString() : undefined,
         delayMs: Math.max(1000, Number(delaySec) * 1000),
@@ -155,7 +215,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
       });
 
       toast.success(
-        `Successfully queued ${recipients.length} email(s) into BullMQ!`,
+        `Successfully queued ${finalRecipients.length} email(s) into BullMQ!`,
         'Campaign Scheduled'
       );
       onSuccess?.();
@@ -167,18 +227,25 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
     }
   };
 
-  const displayedRecipients = recipients.slice(0, 3);
-  const remainingCount = recipients.length - displayedRecipients.length;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto">
       <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
-        {/* Hidden File Input for CSV / TXT Upload */}
+        {/* Hidden File Input for Leads CSV / TXT */}
         <input
-          ref={fileInputRef}
+          ref={leadsFileInputRef}
           type="file"
           accept=".csv,.txt"
-          onChange={handleFileUpload}
+          onChange={handleLeadsFileUpload}
+          className="hidden"
+        />
+
+        {/* Hidden File Input for Attachments (PDF, Images, Word Docs, etc.) */}
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          multiple
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
+          onChange={handleAttachmentUpload}
           className="hidden"
         />
 
@@ -198,14 +265,19 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Paperclip attachment */}
+            {/* Paperclip attachment icon for PDFs, Images, Word Docs */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 text-gray-400 hover:text-[#00A854] hover:bg-green-50 rounded-full transition"
-              title="Attach files / CSV"
+              onClick={() => attachmentInputRef.current?.click()}
+              className="p-1.5 text-gray-400 hover:text-[#00A854] hover:bg-green-50 rounded-full transition flex items-center gap-1"
+              title="Attach documents, PDFs, pictures, or files"
             >
               <Paperclip className="h-4 w-4" />
+              {attachments.length > 0 && (
+                <span className="h-4 w-4 rounded-full bg-[#00A854] text-white text-[10px] font-bold flex items-center justify-center">
+                  {attachments.length}
+                </span>
+              )}
             </button>
 
             {/* Clock / Schedule toggle */}
@@ -217,7 +289,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                   ? 'text-[#00A854] bg-green-50'
                   : 'text-gray-400 hover:text-[#00A854] hover:bg-green-50'
               }`}
-              title="Set scheduled start time"
+              title="Schedule start date and time"
             >
               <Clock className="h-4 w-4" />
             </button>
@@ -268,12 +340,13 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
 
           <div className="border-b border-gray-100" />
 
-          {/* Row 2: To with Recipient Pills + Upload List button */}
+          {/* Row 2: To with Recipient Pills + Inline input + Upload List button */}
           <div className="flex items-center justify-between gap-4 text-sm">
-            <div className="flex items-center gap-6 flex-1 flex-wrap">
+            <div className="flex items-center gap-4 flex-1 flex-wrap">
               <span className="w-16 text-gray-400 font-medium">To</span>
-              <div className="flex items-center gap-2 flex-wrap">
-                {displayedRecipients.map((recip) => (
+              <div className="flex items-center gap-2 flex-wrap flex-1">
+                {/* Committed recipient pills */}
+                {recipients.map((recip) => (
                   <span
                     key={recip}
                     className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-[#00A854] bg-[#E8F5E9]/50 text-[#007A3D] text-xs font-mono"
@@ -289,49 +362,25 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                   </span>
                 ))}
 
-                {remainingCount > 0 && (
-                  <span className="px-2.5 py-0.5 rounded-full border border-[#00A854] bg-[#E8F5E9] text-[#007A3D] text-xs font-bold font-mono">
-                    +{remainingCount}
-                  </span>
-                )}
-
-                {isAddingRecipient ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="email"
-                      placeholder="recipient@domain.com"
-                      value={newRecipientInput}
-                      onChange={(e) => setNewRecipientInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRecipient())}
-                      className="px-2.5 py-0.5 text-xs rounded-full border border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#00A854]"
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddRecipient}
-                      className="text-xs text-[#00A854] font-medium px-2 py-0.5 hover:bg-green-50 rounded"
-                    >
-                      Add
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingRecipient(true)}
-                    className="text-gray-400 hover:text-[#00A854] p-1 rounded-full hover:bg-gray-100 transition"
-                    title="Add recipient manually"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                {/* Inline text input for recipient (type and hit Enter or click anywhere) */}
+                <input
+                  type="email"
+                  placeholder={recipients.length === 0 ? "recipient@example.com (press Enter)" : "add more..."}
+                  value={newRecipientInput}
+                  onChange={(e) => setNewRecipientInput(e.target.value)}
+                  onKeyDown={handleRecipientKeyDown}
+                  onBlur={addCurrentInputAsRecipient}
+                  className="flex-1 min-w-[200px] border-0 p-1 text-xs sm:text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-0"
+                />
               </div>
             </div>
 
-            {/* Right: Upload List Button matching Figma Image 5 */}
+            {/* Right: Upload List Button (specifically for CSV / TXT lead lists) */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => leadsFileInputRef.current?.click()}
               className="flex items-center gap-1.5 text-xs font-semibold text-[#00A854] hover:text-[#007A3D] transition shrink-0 px-2 py-1 hover:bg-green-50 rounded-lg"
+              title="Upload CSV or TXT file of email leads"
             >
               <Upload className="h-3.5 w-3.5" />
               <span>Upload List</span>
@@ -404,12 +453,50 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
             {/* Main Textarea */}
             <textarea
               id="compose-body"
-              rows={8}
+              rows={7}
               placeholder="Type Your Reply..."
               value={body}
               onChange={(e) => setBody(e.target.value)}
               className="w-full bg-transparent p-5 text-sm text-gray-800 placeholder-gray-400 border-0 focus:outline-none focus:ring-0 resize-none font-normal leading-relaxed"
             />
+
+            {/* Attachments Preview Gallery matching Figma Image 4 */}
+            {attachments.length > 0 && (
+              <div className="p-4 bg-white border-t border-gray-200/80 flex items-center gap-3 overflow-x-auto">
+                {attachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className="relative group flex items-center gap-2 p-2 rounded-xl border border-gray-200 bg-gray-50/80 shrink-0 max-w-[200px]"
+                  >
+                    {att.isImage && att.previewUrl ? (
+                      <img
+                        src={att.previewUrl}
+                        alt={att.name}
+                        className="h-9 w-9 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="h-9 w-9 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-gray-800 truncate" title={att.name}>
+                        {att.name}
+                      </p>
+                      <p className="text-[10px] text-gray-400">{att.sizeFormatted}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(att.id)}
+                      className="text-gray-400 hover:text-red-500 p-0.5 rounded transition"
+                      title="Remove attachment"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
