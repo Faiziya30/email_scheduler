@@ -1,11 +1,41 @@
 import { ConnectionOptions } from 'bullmq';
 import { env } from './env';
 
-const url = new URL(env.REDIS_URL);
+const parseRedisUrl = (redisUrl: string): ConnectionOptions => {
+  try {
+    const parsed = new URL(redisUrl);
+    const isTls = parsed.protocol === 'rediss:';
 
-export const redisConnectionOptions: ConnectionOptions = {
-  host: url.hostname || 'localhost',
-  port: parseInt(url.port || '6379', 10),
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
+    const opts: ConnectionOptions = {
+      host: parsed.hostname || 'localhost',
+      port: parseInt(parsed.port || (isTls ? '6379' : '6379'), 10),
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    };
+
+    if (parsed.username) {
+      opts.username = decodeURIComponent(parsed.username);
+    }
+    if (parsed.password) {
+      opts.password = decodeURIComponent(parsed.password);
+    }
+    if (isTls) {
+      opts.tls = {
+        rejectUnauthorized: false,
+      };
+    }
+
+    return opts;
+  } catch (error) {
+    console.warn('⚠️ Could not parse REDIS_URL, falling back to localhost:6379');
+    return {
+      host: 'localhost',
+      port: 6379,
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    };
+  }
 };
+
+export const redisConnectionOptions: ConnectionOptions = parseRedisUrl(env.REDIS_URL);
+

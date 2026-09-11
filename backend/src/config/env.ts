@@ -9,7 +9,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   FRONTEND_URL: z.string().default('http://localhost:5173'),
 
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  DATABASE_URL: z.string().default('postgresql://reachinbox_user:password@localhost:5432/reachinbox'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   ELASTICSEARCH_NODE: z.string().default('http://localhost:9200'),
 
