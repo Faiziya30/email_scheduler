@@ -56,6 +56,8 @@ router.get('/status', async (req: Request, res: Response) => {
       data: {
         connected: isConnected,
         teamId: integration?.teamId,
+        teamName: (integration as any)?.teamName || undefined,
+        channelName: (integration as any)?.channelName || undefined,
       },
     });
   } catch (error: any) {

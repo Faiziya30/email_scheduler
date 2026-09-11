@@ -42,6 +42,7 @@ model SlackIntegration {
   accessToken String
   webhookUrl  String?
   teamId      String?
+  teamName    String?
   createdAt   DateTime @default(now())
 }
 

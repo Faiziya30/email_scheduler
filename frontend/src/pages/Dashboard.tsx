@@ -11,8 +11,11 @@ import {
   ExternalLink,
   LogOut,
   ChevronDown,
+  CheckCircle2,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../context';
+import { useToast } from '../context/ToastContext';
 import { ComposeModal } from '../components/ComposeModal';
 import { EmailDetailModal } from '../components/EmailDetailModal';
 import { getScheduledEmails, getSentEmails, searchEmails, getSlackStatus, getSlackConnectUrl } from '../api/emails';
@@ -29,6 +32,8 @@ export const Dashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [starredIds, setStarredIds] = useState<Set<string>>(new Set());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [slackJustConnected, setSlackJustConnected] = useState(false);
+  const toast = useToast();
 
   // ── Scheduled Emails Query ───────────────────────────────────────────────
   const {
@@ -70,11 +75,29 @@ export const Dashboard: React.FC = () => {
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('slack') === 'connected') {
+      // Show immediate success feedback
+      setSlackJustConnected(true);
+      toast.success(
+        'Your Slack workspace is now connected! You will receive real-time rate-limit alerts in your Slack channel.',
+        'Slack Connected Successfully'
+      );
       refetchSlack();
       const cleanUrl = window.location.pathname;
       window.history.replaceState({}, document.title, cleanUrl);
+      // Auto-dismiss the banner after 8 seconds
+      setTimeout(() => setSlackJustConnected(false), 8000);
     }
-  }, [refetchSlack]);
+    const slackError = params.get('slack_error');
+    if (slackError) {
+      toast.error(
+        `Slack connection failed: ${decodeURIComponent(slackError)}. Please try again.`,
+        'Slack Connection Error'
+      );
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
   const scheduledCount = scheduledJobs?.length ?? 0;
@@ -322,6 +345,28 @@ export const Dashboard: React.FC = () => {
             </button>
           </div>
         </header>
+
+        {/* Slack Connection Success Banner */}
+        {slackJustConnected && (
+          <div className="mx-4 mt-3 mb-1 flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 animate-in fade-in slide-in-from-top-2 duration-300">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-emerald-900">Slack Connected Successfully!</p>
+              <p className="text-xs text-emerald-700 mt-0.5">
+                {slackStatus?.teamName
+                  ? `Workspace "${slackStatus.teamName}" is now linked.`
+                  : 'Your workspace is now linked.'}{' '}
+                You will receive real-time alerts when rate limits are hit.
+              </p>
+            </div>
+            <button
+              onClick={() => setSlackJustConnected(false)}
+              className="p-1 text-emerald-400 hover:text-emerald-700 rounded transition shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {/* Email Rows List matching Figma Images 2 & 3 */}
         <div className="flex-1 overflow-y-auto divide-y divide-gray-100">

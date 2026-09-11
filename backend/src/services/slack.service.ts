@@ -37,6 +37,7 @@ export const handleSlackCallback = async (code: string, userId: string) => {
         data: {
           accessToken: response.access_token,
           teamId: response.team?.id,
+          teamName: response.team?.name,
           webhookUrl: (response as any).incoming_webhook?.url,
         },
       });
@@ -46,6 +47,7 @@ export const handleSlackCallback = async (code: string, userId: string) => {
           userId,
           accessToken: response.access_token,
           teamId: response.team?.id,
+          teamName: response.team?.name,
           webhookUrl: (response as any).incoming_webhook?.url,
         },
       });

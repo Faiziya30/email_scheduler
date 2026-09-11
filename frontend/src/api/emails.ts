@@ -76,9 +76,9 @@ export const emailApi = {
   /**
    * Get current Slack integration connection status
    */
-  getSlackStatus: async (): Promise<{ connected: boolean; teamId?: string; teamName?: string }> => {
+  getSlackStatus: async (): Promise<{ connected: boolean; teamId?: string; teamName?: string; channelName?: string }> => {
     try {
-      const res = await apiClient<ApiSuccess<{ connected: boolean; teamId?: string; teamName?: string }>>('/slack/status');
+      const res = await apiClient<ApiSuccess<{ connected: boolean; teamId?: string; teamName?: string; channelName?: string }>>('/slack/status');
       return res.data;
     } catch {
       return { connected: false };

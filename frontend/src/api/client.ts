@@ -51,11 +51,33 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     ...((headers as Record<string, string>) || {}),
   };
 
-  const response = await fetch(url, {
-    credentials: 'include', // Send httpOnly cookies
-    headers: requestHeaders,
-    ...restOptions,
-  });
+  // 30-second timeout to prevent infinite loading on cold starts
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      credentials: 'include', // Send httpOnly cookies
+      headers: requestHeaders,
+      signal: controller.signal,
+      ...restOptions,
+    });
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new ApiError(
+        'Request timed out. The server may be starting up — please try again in a few seconds.',
+        408,
+      );
+    }
+    throw new ApiError(
+      'Network error. Please check your connection and try again.',
+      0,
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
 
   let data: any = null;
