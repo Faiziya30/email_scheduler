@@ -33,22 +33,29 @@ export const initPassport = () => {
             return done(new Error('No email found in Google profile'));
           }
 
-          const user = await prisma.user.upsert({
-            where: { googleId },
-            create: {
-              googleId,
-              email,
-              name,
-              avatarUrl,
-            },
-            update: {
-              email,
-              name,
-              avatarUrl,
-            },
-          });
+          try {
+            const user = await prisma.user.upsert({
+              where: { googleId },
+              create: {
+                googleId,
+                email,
+                name,
+                avatarUrl,
+              },
+              update: {
+                email,
+                name,
+                avatarUrl,
+              },
+            });
 
-          return done(null, user);
+            return done(null, user);
+          } catch (dbError) {
+            console.warn('⚠️ PostgreSQL offline. Saving Google OAuth user session in-memory.');
+            const { upsertGoogleUserMemory } = require('../models/userHelper');
+            const user = upsertGoogleUserMemory({ googleId, email, name, avatarUrl });
+            return done(null, user);
+          }
         } catch (error) {
           return done(error as Error, undefined);
         }
