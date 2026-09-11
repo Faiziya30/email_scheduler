@@ -203,3 +203,7 @@ emailWorker.on('failed', (job, err) => {
   }
   console.error(`[Worker Events] ❌ Job ${job?.id} FAILED:`, err.message);
 });
+
+emailWorker.on('error', (err) => {
+  console.warn('⚠️ BullMQ emailWorker connection warning:', err?.message);
+});

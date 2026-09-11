@@ -33,3 +33,7 @@ export const emailQueue = new Queue(EMAIL_QUEUE_NAME, {
     removeOnFail: false,     // Keep failed jobs visible for debugging
   },
 });
+
+emailQueue.on('error', (err) => {
+  console.warn('⚠️ BullMQ emailQueue connection warning:', err?.message);
+});
