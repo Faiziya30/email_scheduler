@@ -160,28 +160,24 @@ export class EmailSchedulerService {
       throw new Error('Email job not found');
     }
 
-    // Attempt to remove job from BullMQ queue if still pending
+    // 1. Delete from PostgreSQL immediately (Guaranteed fast DB operation)
+    await prisma.emailJob.delete({
+      where: { id: job.id },
+    });
+
+    // 2. Non-blocking BullMQ queue cleanup (fire-and-forget so Redis offline never blocks API)
     if (job.bullJobId) {
-      try {
-        const bullJob = await emailQueue.getJob(job.bullJobId);
-        if (bullJob) {
-          await bullJob.remove();
-        }
-      } catch (err: any) {
-        console.warn(`Could not remove job ${job.bullJobId} from BullMQ:`, err?.message);
-      }
+      Promise.race([
+        emailQueue.getJob(job.bullJobId).then((bullJob) => bullJob?.remove()),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Queue timeout')), 500)),
+      ]).catch(() => {});
     }
 
-    // Delete from Elasticsearch (non-blocking)
+    // 3. Non-blocking Elasticsearch cleanup (fire-and-forget)
     try {
       const { esClient, EMAILS_INDEX } = require('./search.service');
       esClient.delete({ index: EMAILS_INDEX, id: job.id }).catch(() => {});
     } catch {}
-
-    // Delete from PostgreSQL
-    await prisma.emailJob.delete({
-      where: { id: job.id },
-    });
 
     return { success: true, id: job.id };
   }

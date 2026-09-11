@@ -110,17 +110,23 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleDeleteEmail = async (id: string) => {
+    // 1. Optimistic instant UI update
+    queryClient.setQueryData<EmailJob[]>(['emails', 'scheduled'], (old) => old ? old.filter((j) => j.id !== id) : []);
+    queryClient.setQueryData<EmailJob[]>(['emails', 'sent'], (old) => old ? old.filter((j) => j.id !== id) : []);
+    if (selectedEmail?.id === id) {
+      setSelectedEmail(null);
+    }
+
     try {
       await deleteEmail(id);
       toast.success('Email deleted successfully', 'Deleted');
       queryClient.invalidateQueries({ queryKey: ['emails', 'scheduled'] });
       queryClient.invalidateQueries({ queryKey: ['emails', 'sent'] });
       queryClient.invalidateQueries({ queryKey: ['emails', 'search'] });
-      if (selectedEmail?.id === id) {
-        setSelectedEmail(null);
-      }
     } catch (err: any) {
       toast.error(err?.message || 'Failed to delete email', 'Delete Error');
+      queryClient.invalidateQueries({ queryKey: ['emails', 'scheduled'] });
+      queryClient.invalidateQueries({ queryKey: ['emails', 'sent'] });
     }
   };
 
