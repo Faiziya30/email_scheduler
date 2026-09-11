@@ -125,7 +125,8 @@ export class EmailSchedulerService {
 
   public static async getScheduledEmails(limit = 100, userId?: string) {
     const { processPendingDueEmails } = require('../jobs/schedulerRecovery');
-    await processPendingDueEmails().catch(() => {});
+    // Trigger background recovery sweep non-blocking
+    processPendingDueEmails().catch(() => {});
 
     return prisma.emailJob.findMany({
       where: {
@@ -142,7 +143,8 @@ export class EmailSchedulerService {
 
   public static async getSentEmails(limit = 100, userId?: string) {
     const { processPendingDueEmails } = require('../jobs/schedulerRecovery');
-    await processPendingDueEmails().catch(() => {});
+    // Trigger background recovery sweep non-blocking
+    processPendingDueEmails().catch(() => {});
 
     return prisma.emailJob.findMany({
       where: {

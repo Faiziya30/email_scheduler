@@ -392,9 +392,9 @@ export const Dashboard: React.FC = () => {
 
         {/* Email Rows List matching Figma Images 2 & 3 */}
         <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
-          {(isScheduledLoading && activeTab === 'scheduled') ||
-          (isSentLoading && activeTab === 'sent') ||
-          isSearching ? (
+          {((!scheduledJobs && isScheduledLoading && activeTab === 'scheduled') ||
+          (!sentJobs && isSentLoading && activeTab === 'sent') ||
+          (searchQuery.trim().length > 1 && isSearching)) ? (
             <div className="p-8 text-center text-xs text-gray-400">
               Loading emails...
             </div>
