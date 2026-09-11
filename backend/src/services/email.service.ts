@@ -1,40 +1,51 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import { env } from '../config/env';
 
-let transporterPromise: Promise<Transporter> | null = null;
+let cachedTransporter: Transporter | null = null;
 
 const getTransporter = async (): Promise<Transporter> => {
-  if (!transporterPromise) {
-    transporterPromise = (async () => {
-      if (env.ETHEREAL_USER && env.ETHEREAL_PASS) {
-        console.log(`📬 Using configured Ethereal account: ${env.ETHEREAL_USER}`);
-        return nodemailer.createTransport({
-          host: 'smtp.ethereal.email',
-          port: 587,
-          secure: false,
-          auth: {
-            user: env.ETHEREAL_USER,
-            pass: env.ETHEREAL_PASS,
-          },
-        });
-      }
+  if (cachedTransporter) return cachedTransporter;
 
-      console.log('📬 Initializing auto-generated Ethereal Email test account...');
-      const testAccount = await nodemailer.createTestAccount();
-      console.log(`✨ Ethereal Email account created: ${testAccount.user}`);
-
-      return nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false, // true for 465, false for other ports
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-      });
-    })();
+  if (env.ETHEREAL_USER && env.ETHEREAL_PASS) {
+    console.log(`📬 Using configured Ethereal account: ${env.ETHEREAL_USER}`);
+    cachedTransporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: env.ETHEREAL_USER,
+        pass: env.ETHEREAL_PASS,
+      },
+    });
+    return cachedTransporter;
   }
-  return transporterPromise;
+
+  try {
+    console.log('📬 Initializing auto-generated Ethereal Email test account...');
+    const testAccountPromise = nodemailer.createTestAccount();
+    const testAccount = await Promise.race([
+      testAccountPromise,
+      new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Ethereal test account creation timeout')), 5000)),
+    ]);
+    console.log(`✨ Ethereal Email account created: ${testAccount.user}`);
+
+    cachedTransporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+    return cachedTransporter;
+  } catch (err: any) {
+    console.warn('⚠️ Ethereal account creation failed, using sandbox JSON transport:', err?.message);
+    cachedTransporter = nodemailer.createTransport({
+      jsonTransport: true,
+    });
+    return cachedTransporter;
+  }
 };
 
 export interface SendEmailParams {

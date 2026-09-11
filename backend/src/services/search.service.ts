@@ -22,12 +22,17 @@ export interface EmailDocument {
   sentAt?: string | Date | null;
 }
 
+let isElasticsearchAvailable = false;
+
 /**
  * Initializes the Elasticsearch 'emails' index with explicit mappings on application startup.
  */
 export const initElasticsearchIndex = async (): Promise<void> => {
   try {
-    const exists = await esClient.indices.exists({ index: EMAILS_INDEX });
+    const exists = await Promise.race([
+      esClient.indices.exists({ index: EMAILS_INDEX }),
+      new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error('ES ping timeout')), 1000)),
+    ]);
 
     if (!exists) {
       console.log(`🔍 Creating Elasticsearch index '${EMAILS_INDEX}' with explicit mapping...`);
@@ -66,8 +71,10 @@ export const initElasticsearchIndex = async (): Promise<void> => {
     } else {
       console.log(`🔍 Elasticsearch index '${EMAILS_INDEX}' is ready.`);
     }
+    isElasticsearchAvailable = true;
   } catch (error: any) {
-    console.warn('⚠️ Elasticsearch not reachable. Search will use PostgreSQL fallback:', error.message);
+    isElasticsearchAvailable = false;
+    console.warn('⚠️ Elasticsearch not reachable. Search will use instant PostgreSQL engine.');
   }
 };
 
@@ -75,6 +82,7 @@ export const initElasticsearchIndex = async (): Promise<void> => {
  * Upserts an email document into the Elasticsearch 'emails' index.
  */
 export const indexEmail = async (email: EmailDocument): Promise<void> => {
+  if (!isElasticsearchAvailable) return;
   try {
     await esClient.index({
       index: EMAILS_INDEX,
@@ -90,11 +98,11 @@ export const indexEmail = async (email: EmailDocument): Promise<void> => {
         scheduledAt: email.scheduledAt ? new Date(email.scheduledAt).toISOString() : null,
         sentAt: email.sentAt ? new Date(email.sentAt).toISOString() : null,
       },
-      refresh: 'wait_for',
     });
     console.log(`🔍 Indexed email ${email.id} into Elasticsearch (status: ${email.status})`);
   } catch (error: any) {
-    console.warn(`⚠️ Skipping Elasticsearch indexing for email ${email.id} (service offline)`);
+    isElasticsearchAvailable = false;
+    console.warn(`⚠️ Skipping Elasticsearch indexing for email ${email.id}`);
   }
 };
 
@@ -103,89 +111,95 @@ export const indexEmail = async (email: EmailDocument): Promise<void> => {
  * Seamlessly falls back to PostgreSQL ILIKE query if Elasticsearch is offline.
  */
 export const searchEmails = async (queryText: string, userId?: string) => {
-  try {
-    const shouldQueries: any[] = [
-      {
-        multi_match: {
-          query: queryText,
-          fields: ['subject^3', 'recipient^2', 'sender', 'body'],
-          fuzziness: 'AUTO',
-        },
-      },
-      {
-        wildcard: {
-          'recipient.keyword': {
-            value: `*${queryText.toLowerCase()}*`,
-            case_insensitive: true,
-          },
-        },
-      },
-      {
-        wildcard: {
-          'subject.keyword': {
-            value: `*${queryText.toLowerCase()}*`,
-            case_insensitive: true,
-          },
-        },
-      },
-    ];
-
-    const mustQueries: any[] = [];
-    if (userId) {
-      mustQueries.push({ term: { userId } });
-    }
-
-    const response = await esClient.search({
-      index: EMAILS_INDEX,
-      query: {
-        bool: {
-          must: mustQueries,
-          should: shouldQueries,
-          minimum_should_match: 1,
-        },
-      },
-      sort: [{ scheduledAt: { order: 'desc', unmapped_type: 'date' } }],
-      size: 50,
-    });
-
-    return response.hits.hits.map((hit) => ({
-      _id: hit._id,
-      _score: hit._score,
-      ...(hit._source as EmailDocument),
-    }));
-  } catch (error: any) {
-    console.warn('⚠️ Elasticsearch query failed, using PostgreSQL database search fallback...');
-    
-    // Database fallback
+  if (isElasticsearchAvailable) {
     try {
-      const dbResults = await prisma.emailJob.findMany({
-        where: {
-          ...(userId ? { userId } : {}),
-          OR: [
-            { recipient: { contains: queryText, mode: 'insensitive' } },
-            { subject: { contains: queryText, mode: 'insensitive' } },
-            { body: { contains: queryText, mode: 'insensitive' } },
-          ],
+      const shouldQueries: any[] = [
+        {
+          multi_match: {
+            query: queryText,
+            fields: ['subject^3', 'recipient^2', 'sender', 'body'],
+            fuzziness: 'AUTO',
+          },
         },
-        orderBy: { scheduledAt: 'desc' },
-        take: 50,
+        {
+          wildcard: {
+            'recipient.keyword': {
+              value: `*${queryText.toLowerCase()}*`,
+              case_insensitive: true,
+            },
+          },
+        },
+        {
+          wildcard: {
+            'subject.keyword': {
+              value: `*${queryText.toLowerCase()}*`,
+              case_insensitive: true,
+            },
+          },
+        },
+      ];
+
+      const mustQueries: any[] = [];
+      if (userId) {
+        mustQueries.push({ term: { userId } });
+      }
+
+      const response = await esClient.search({
+        index: EMAILS_INDEX,
+        query: {
+          bool: {
+            must: mustQueries,
+            should: shouldQueries,
+            minimum_should_match: 1,
+          },
+        },
+        sort: [{ scheduledAt: { order: 'desc', unmapped_type: 'date' } }],
+        size: 50,
       });
 
-      return dbResults.map((job) => ({
-        _id: job.id,
-        id: job.id,
-        userId: job.userId,
-        recipient: job.recipient,
-        subject: job.subject,
-        body: job.body,
-        status: job.status,
-        scheduledAt: job.scheduledAt,
-        sentAt: job.sentAt,
-      }));
-    } catch (dbErr: any) {
-      console.error('❌ Database search fallback also failed:', dbErr.message);
-      return [];
+      return response.hits.hits.map((hit) => {
+        const source = (hit._source || {}) as EmailDocument;
+        return {
+          _id: hit._id,
+          score: hit._score,
+          ...source,
+          id: source.id || hit._id,
+        };
+      });
+    } catch (error: any) {
+      isElasticsearchAvailable = false;
     }
+  }
+
+  // Instant PostgreSQL database search
+  try {
+    const dbResults = await prisma.emailJob.findMany({
+      where: {
+        ...(userId ? { userId } : {}),
+        OR: [
+          { recipient: { contains: queryText, mode: 'insensitive' } },
+          { subject: { contains: queryText, mode: 'insensitive' } },
+          { body: { contains: queryText, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { scheduledAt: 'desc' },
+      take: 50,
+    });
+
+    return dbResults.map((job) => ({
+      _id: job.id,
+      id: job.id,
+      userId: job.userId,
+      recipient: job.recipient,
+      subject: job.subject,
+      body: job.body,
+      status: job.status,
+      scheduledAt: job.scheduledAt,
+      sentAt: job.sentAt,
+    }));
+  } catch (dbErr: any) {
+    console.error('❌ Database search fallback failed:', dbErr.message);
+    return [];
   }
 };
 

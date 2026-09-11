@@ -4,13 +4,21 @@ import { notifySlackRateLimitHit } from './slack.service';
 
 const isTls = env.REDIS_URL.startsWith('rediss://');
 const redisOptions: RedisOptions = {
-  maxRetriesPerRequest: null,
+  maxRetriesPerRequest: 1,
   enableReadyCheck: false,
+  connectTimeout: 2000,
+  commandTimeout: 2000,
+  enableOfflineQueue: false,
+  retryStrategy: () => null,
   ...(isTls ? { tls: { rejectUnauthorized: false } } : {}),
 };
 
 const redis = new Redis(env.REDIS_URL, redisOptions);
+redis.on('error', (err) => {
+  // Silent warning for redis connection
+});
 
+const memoryRateCounts = new Map<string, { count: number; expiresAt: number }>();
 
 export interface RateLimitCheckResult {
   allowed: boolean;
@@ -58,16 +66,21 @@ export class RateLimiterService {
     const { nextHourDate, delayUntilNextHourMs } = this.getNextHourDetails();
 
     try {
-      // Redis atomic increment
-      const currentCount = await redis.incr(key);
+      // Redis atomic increment with 1.5s timeout safety
+      const redisIncrPromise = (async () => {
+        const currentCount = await redis.incr(key);
+        if (currentCount === 1) {
+          await redis.expire(key, 7200);
+        }
+        return currentCount;
+      })();
 
-      // If this is the first item in this hourly bucket, set TTL for 2 hours (7200s)
-      if (currentCount === 1) {
-        await redis.expire(key, 7200);
-      }
+      const currentCount = await Promise.race([
+        redisIncrPromise,
+        new Promise<number>((_, reject) => setTimeout(() => reject(new Error('Redis timeout')), 1500)),
+      ]);
 
       if (currentCount > limit) {
-        // Hour cap exceeded: do not count this toward the current bucket
         return {
           allowed: false,
           currentCount,
@@ -85,13 +98,33 @@ export class RateLimiterService {
         delayUntilNextHourMs,
       };
     } catch (err: any) {
-      console.warn('⚠️ Redis rate limiter unreachable, using safe fallback:', err?.message);
+      // Memory fallback rate limiter
+      const now = Date.now();
+      const memEntry = memoryRateCounts.get(key);
+      let currentCount = 1;
+      if (memEntry && memEntry.expiresAt > now) {
+        currentCount = memEntry.count + 1;
+        memEntry.count = currentCount;
+      } else {
+        memoryRateCounts.set(key, { count: 1, expiresAt: now + 3600 * 1000 });
+      }
+
+      if (currentCount > limit) {
+        return {
+          allowed: false,
+          currentCount,
+          limit,
+          nextHourDate,
+          delayUntilNextHourMs,
+        };
+      }
+
       return {
         allowed: true,
-        currentCount: 1,
+        currentCount,
         limit,
         nextHourDate,
-        delayUntilNextHourMs: 0,
+        delayUntilNextHourMs,
       };
     }
   }
@@ -105,16 +138,20 @@ export class RateLimiterService {
     nextHourDate: Date,
     baseDelayMs: number,
   ): Promise<number> {
-    const staggerKey = `stagger:${senderId}:${nextHourDate.toISOString()}`;
-    const staggerIndex = await redis.incr(staggerKey);
-    if (staggerIndex === 1) {
-      await redis.expire(staggerKey, 7200);
+    try {
+      const staggerKey = `stagger:${senderId}:${nextHourDate.toISOString()}`;
+      const staggerIndex = await Promise.race([
+        redis.incr(staggerKey),
+        new Promise<number>((_, reject) => setTimeout(() => reject(new Error('Redis timeout')), 1000)),
+      ]);
+      if (staggerIndex === 1) {
+        await redis.expire(staggerKey, 7200).catch(() => {});
+      }
+      const minDelay = env.MIN_DELAY_MS_BETWEEN_SENDS || 1000;
+      return baseDelayMs + (staggerIndex - 1) * minDelay;
+    } catch {
+      return baseDelayMs + 1000;
     }
-
-    const minDelay = env.MIN_DELAY_MS_BETWEEN_SENDS || 1000;
-    const staggerOffsetMs = (staggerIndex - 1) * minDelay;
-
-    return baseDelayMs + staggerOffsetMs;
   }
 
   /**
