@@ -20,7 +20,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://reachinbox-frontend.onrender.com # Update once frontend is provisioned
+        value: https://reachinbox-frontend-9qww.onrender.com
       - key: WORKER_CONCURRENCY
         value: 5
       - key: MIN_DELAY_MS_BETWEEN_SENDS
@@ -41,7 +41,7 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://reachinbox-backend.onrender.com/api # Update once backend is provisioned
+        value: https://reachinbox-backend-vvu3.onrender.com/api
 
 # ── Managed PostgreSQL Database ─────────────────────────────────────────────
 databases:
