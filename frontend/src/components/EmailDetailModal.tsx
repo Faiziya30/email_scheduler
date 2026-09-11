@@ -107,10 +107,19 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({ email, onClo
 
           {/* Ethereal SMTP Link if Sent */}
           {isSent && (
-            <div className="pt-4 border-t border-gray-150">
+            <div className="pt-4 border-t border-gray-150 flex items-center justify-between">
               <span className="text-xs text-emerald-600 font-medium flex items-center gap-1.5">
-                ✓ Delivered via Ethereal SMTP Fake Server
+                ✓ Delivered via Ethereal SMTP (Test Sandbox)
               </span>
+              <a
+                href="https://ethereal.email/messages"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-[#00A854] hover:underline font-semibold"
+              >
+                <span>View in Ethereal Mailbox</span>
+                <span className="text-[10px]">↗</span>
+              </a>
             </div>
           )}
         </div>
