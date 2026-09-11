@@ -4,6 +4,8 @@ import { prisma } from '../models';
 
 export const esClient = new Client({
   node: env.ELASTICSEARCH_NODE,
+  requestTimeout: 1500,
+  maxRetries: 0,
 });
 
 export const EMAILS_INDEX = 'emails';

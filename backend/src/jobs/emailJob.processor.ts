@@ -81,8 +81,8 @@ export const emailWorker = new Worker<EmailJobData>(
         },
       });
 
-      // Update Elasticsearch with deferred schedule time
-      await indexEmail({
+      // Update Elasticsearch with deferred schedule time (non-blocking)
+      indexEmail({
         id: emailJobId,
         userId,
         sender: senderEmail,
@@ -91,7 +91,7 @@ export const emailWorker = new Worker<EmailJobData>(
         body,
         status: 'PENDING',
         scheduledAt: rescheduledTargetDate,
-      });
+      }).catch(() => {});
 
       console.log(
         `[Worker] 🔁 Job ${job.id} rescheduled to: ${rescheduledTargetDate.toISOString()} (+${Math.round(staggeredDelayMs / 1000)}s delay)`,
@@ -131,8 +131,8 @@ export const emailWorker = new Worker<EmailJobData>(
         },
       });
 
-      // Upsert into Elasticsearch with status: SENT
-      await indexEmail({
+      // Upsert into Elasticsearch with status: SENT (non-blocking)
+      indexEmail({
         id: emailJobId,
         userId,
         sender: senderEmail,
@@ -141,7 +141,7 @@ export const emailWorker = new Worker<EmailJobData>(
         body,
         status: 'SENT',
         sentAt,
-      });
+      }).catch(() => {});
 
       console.log(`[Worker] ✅ Email successfully sent to ${recipient}`);
       return {
@@ -162,8 +162,8 @@ export const emailWorker = new Worker<EmailJobData>(
         },
       });
 
-      // Upsert into Elasticsearch with status: FAILED
-      await indexEmail({
+      // Upsert into Elasticsearch with status: FAILED (non-blocking)
+      indexEmail({
         id: emailJobId,
         userId,
         sender: senderEmail,
@@ -171,7 +171,7 @@ export const emailWorker = new Worker<EmailJobData>(
         subject,
         body,
         status: 'FAILED',
-      });
+      }).catch(() => {});
 
       throw sendError;
     }

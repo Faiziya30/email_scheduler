@@ -63,25 +63,35 @@ export class EmailSchedulerService {
       const bullJobId = `email-job-${emailJob.id}`;
 
       // 3. Add to BullMQ with delay and custom deterministic jobId
-      await emailQueue.add(
-        'send-email',
-        {
-          emailJobId: emailJob.id,
-          userId: activeUserId,
-          senderId: sender.id,
-          senderEmail: sender.emailAddress,
-          recipient,
-          subject,
-          body,
-          scheduledAt: scheduledAt.toISOString(),
-          hourlyLimit: effectiveHourlyLimit,
-          delayMs: stepDelayMs,
-        },
-        {
-          delay: recipientDelayMs,
-          jobId: bullJobId,
-        },
-      );
+      try {
+        const queueAddPromise = emailQueue.add(
+          'send-email',
+          {
+            emailJobId: emailJob.id,
+            userId: activeUserId,
+            senderId: sender.id,
+            senderEmail: sender.emailAddress,
+            recipient,
+            subject,
+            body,
+            scheduledAt: scheduledAt.toISOString(),
+            hourlyLimit: effectiveHourlyLimit,
+            delayMs: stepDelayMs,
+          },
+          {
+            delay: recipientDelayMs,
+            jobId: bullJobId,
+          },
+        );
+
+        // Add timeout safety (5s max) so slow Redis never hangs the entire HTTP request
+        await Promise.race([
+          queueAddPromise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Queue operation timed out')), 5000)),
+        ]);
+      } catch (queueErr: any) {
+        console.warn(`⚠️ Warning: BullMQ queue enqueue error for job ${bullJobId}:`, queueErr?.message);
+      }
 
       // 4. Record bullJobId on the database row
       const updatedJob = await prisma.emailJob.update({
@@ -89,8 +99,8 @@ export class EmailSchedulerService {
         data: { bullJobId },
       });
 
-      // 5. Index into Elasticsearch as PENDING
-      await indexEmail({
+      // 5. Index into Elasticsearch as PENDING (fire-and-forget so offline ES never blocks API)
+      indexEmail({
         id: updatedJob.id,
         userId: activeUserId,
         sender: sender.emailAddress,
@@ -99,7 +109,7 @@ export class EmailSchedulerService {
         body: updatedJob.body,
         status: 'PENDING',
         scheduledAt: updatedJob.scheduledAt,
-      });
+      }).catch((err) => console.warn(`⚠️ Elasticsearch indexing skipped for ${updatedJob.id}:`, err?.message));
 
       scheduledJobs.push(updatedJob);
     }
