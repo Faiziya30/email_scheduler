@@ -62,6 +62,13 @@ export class EmailSchedulerService {
       // 2. Deterministic BullMQ Job ID from DB ID
       const bullJobId = `email-job-${emailJob.id}`;
 
+      // Claim the row before enqueueing so recovery cannot send it while Redis is
+      // moving the delayed job into BullMQ.
+      await prisma.emailJob.update({
+        where: { id: emailJob.id },
+        data: { bullJobId },
+      });
+
       // 3. Add to BullMQ with delay and custom deterministic jobId
       try {
         const queueAddPromise = emailQueue.add(
@@ -91,12 +98,16 @@ export class EmailSchedulerService {
         ]);
       } catch (queueErr: any) {
         console.warn(`⚠️ Warning: BullMQ queue enqueue error for job ${bullJobId}:`, queueErr?.message);
+        // Leave it as an orphan so the persistent recovery path can retry it.
+        await prisma.emailJob.update({
+          where: { id: emailJob.id },
+          data: { bullJobId: null },
+        });
       }
 
-      // 4. Record bullJobId on the database row
-      const updatedJob = await prisma.emailJob.update({
+      // 4. Read the final persisted state for the API response and indexing.
+      const updatedJob = await prisma.emailJob.findUniqueOrThrow({
         where: { id: emailJob.id },
-        data: { bullJobId },
       });
 
       // 5. Index into Elasticsearch as PENDING (fire-and-forget so offline ES never blocks API)

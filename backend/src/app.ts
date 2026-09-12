@@ -31,7 +31,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 
 // Bull Board Admin Dashboard
-app.use('/admin/queues', bullBoardRouter);
+app.use('/admin/queues', authGuard, bullBoardRouter);
 
 // Public API Routes
 app.use('/api', healthRouter);

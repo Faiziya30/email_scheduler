@@ -19,6 +19,9 @@ export const processPendingDueEmails = async (): Promise<void> => {
     const dueJobs = await prisma.emailJob.findMany({
       where: {
         status: 'PENDING',
+        // BullMQ owns every row with a bullJobId. Recovery is only for rows
+        // whose enqueue failed before Redis accepted the job.
+        bullJobId: null,
         scheduledAt: { lte: now },
       },
       include: {

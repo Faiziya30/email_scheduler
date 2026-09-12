@@ -16,7 +16,10 @@ services:
           name: reachinbox-postgres
           property: connectionString
       - key: REDIS_URL
-        sync: false # Enter your Redis URL (e.g., from Upstash Redis or Render Redis)
+        fromService:
+          type: redis
+          name: reachinbox-redis
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
@@ -42,6 +45,10 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         value: https://reachinbox-backend-vvu3.onrender.com/api
+
+  - type: redis
+    name: reachinbox-redis
+    plan: free
 
 # ── Managed PostgreSQL Database ─────────────────────────────────────────────
 databases:

@@ -2,6 +2,7 @@ import React from 'react';
 import { LayoutDashboard, LogOut, ExternalLink } from 'lucide-react';
 import { useAuth } from '../context';
 import { Button } from './Button';
+import { API_BASE_URL } from '../api/client';
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -22,7 +23,7 @@ export const Navbar: React.FC = () => {
         {/* Right actions */}
         <div className="flex items-center gap-3">
           <a
-            href="http://localhost:5000/admin/queues"
+            href={`${API_BASE_URL.replace(/\/api$/, '')}/admin/queues`}
             target="_blank"
             rel="noopener noreferrer"
             className="hidden sm:inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-400 transition"

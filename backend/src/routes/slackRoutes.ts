@@ -3,11 +3,19 @@ import { getSlackAuthorizeUrl, handleSlackCallback, notifySlackRateLimitHit } fr
 import { getOrCreateDefaultUserAndSender } from '../models/userHelper';
 import { prisma } from '../models';
 import { env } from '../config/env';
+import jwt from 'jsonwebtoken';
 
 const router = Router();
 
-router.get('/connect', (_req: Request, res: Response) => {
-  const url = getSlackAuthorizeUrl();
+router.get('/connect', (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  if (!userId) {
+    res.status(401).json({ status: 'error', message: 'Authentication required.' });
+    return;
+  }
+
+  const state = jwt.sign({ userId }, env.JWT_SECRET, { expiresIn: '10m' });
+  const url = getSlackAuthorizeUrl(state);
   res.redirect(url);
 });
 
@@ -25,8 +33,16 @@ router.get('/callback', async (req: Request, res: Response) => {
   }
 
   try {
-    const { user } = await getOrCreateDefaultUserAndSender();
-    await handleSlackCallback(code, user.id);
+    if (!req.query.state || typeof req.query.state !== 'string') {
+      throw new Error('Missing Slack OAuth state');
+    }
+
+    const state = jwt.verify(req.query.state, env.JWT_SECRET) as { userId?: string };
+    if (!state.userId) {
+      throw new Error('Invalid Slack OAuth state');
+    }
+
+    await handleSlackCallback(code, state.userId);
     res.redirect(`${env.FRONTEND_URL}/dashboard?slack=connected`);
   } catch (err: any) {
     console.error('❌ Slack callback error:', err?.message || err);

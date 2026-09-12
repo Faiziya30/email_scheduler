@@ -3,6 +3,7 @@ import { Outlet, Link } from 'react-router-dom';
 import { Mail, LogOut, ExternalLink, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context';
 import { Button } from './Button';
+import { API_BASE_URL } from '../api/client';
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -43,7 +44,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex items-center gap-3 sm:gap-5">
             {/* Bull Board Quick Link */}
             <a
-              href="http://localhost:5000/admin/queues"
+              href={`${API_BASE_URL.replace(/\/api$/, '')}/admin/queues`}
               target="_blank"
               rel="noopener noreferrer"
               className="hidden md:inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-indigo-400 transition-colors py-1 px-2.5 rounded-md hover:bg-slate-800/60"

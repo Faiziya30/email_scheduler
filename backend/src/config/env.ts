@@ -38,4 +38,18 @@ if (!_env.success) {
   throw new Error('Invalid environment variables');
 }
 
+if (_env.data.NODE_ENV === 'production') {
+  const productionRequirements = [
+    ['DATABASE_URL', process.env.DATABASE_URL],
+    ['REDIS_URL', process.env.REDIS_URL],
+    ['JWT_SECRET', process.env.JWT_SECRET],
+  ].filter(([, value]) => !value);
+
+  if (productionRequirements.length > 0) {
+    throw new Error(
+      `Missing required production environment variables: ${productionRequirements.map(([name]) => name).join(', ')}`,
+    );
+  }
+}
+
 export const env = _env.data;

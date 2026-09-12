@@ -20,6 +20,7 @@ import { useToast } from '../context/ToastContext';
 import { ComposeModal } from '../components/ComposeModal';
 import { EmailDetailModal } from '../components/EmailDetailModal';
 import { getScheduledEmails, getSentEmails, searchEmails, deleteEmail, getSlackStatus, getSlackConnectUrl } from '../api/emails';
+import { API_BASE_URL } from '../api/client';
 import type { EmailJob } from '../types';
 
 type TabType = 'scheduled' | 'sent';
@@ -212,7 +213,7 @@ export const Dashboard: React.FC = () => {
             {userMenuOpen && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 z-30 text-xs text-gray-700">
                 <a
-                  href={`${(import.meta.env.VITE_API_BASE_URL || 'https://reachinbox-backend-vvu3.onrender.com/api').replace(/\/api$/, '')}/admin/queues`}
+                  href={`${API_BASE_URL.replace(/\/api$/, '')}/admin/queues`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 transition"

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from '../types';
 import { getMe, logout as apiLogout, devToken as apiDevToken, authApi } from '../api/auth';
+import { ApiError } from '../api/client';
 
 interface AuthContextValue {
   user: User | null;
@@ -46,7 +47,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return await getMe();
       } catch (err: any) {
         // 401 unauthenticated is expected when not logged in
-        return null;
+        if (err instanceof ApiError && err.statusCode === 401) return null;
+        throw err;
       }
     },
     staleTime: 5 * 60 * 1000,
