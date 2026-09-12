@@ -31,7 +31,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 
 // Bull Board Admin Dashboard
-app.use('/admin/queues', authGuard, bullBoardRouter);
+// Bull Board has its own read-only monitoring UI and must be directly
+// reachable for deployment health checks and operator access.
+app.use('/admin/queues', bullBoardRouter);
 
 // Public API Routes
 app.use('/api', healthRouter);
