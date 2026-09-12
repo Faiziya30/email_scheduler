@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
 import {
   ArrowLeft,
@@ -69,6 +69,22 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
 
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSubject('');
+      setBody('');
+      setRecipients([]);
+      setNewRecipientInput('');
+      setAttachments([]);
+      setStartTime('');
+      setDelaySec(2);
+      setHourlyLimit(100);
+      setShowSendLaterPopover(false);
+      setSelectedPresetLabel(null);
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

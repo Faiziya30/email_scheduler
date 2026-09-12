@@ -38,6 +38,29 @@ app.get('/admin/queues/', (req, res) => {
   res.redirect(`/admin/queues/queue/emailQueue${query.toString() ? `?${query.toString()}` : ''}`);
 });
 
+// Bull Board job logs are optional for this app; expose persisted lifecycle
+// events so the Logs tab remains useful when Redis history is unavailable.
+app.get('/admin/queues/api/queues/:queueName/:jobId/logs', async (req, res, next) => {
+  try {
+    const job = await prisma.emailJob.findFirst({
+      where: { OR: [{ id: req.params.jobId }, { bullJobId: req.params.jobId }] },
+    });
+    if (!job) {
+      res.json({ logs: [], count: 0 });
+      return;
+    }
+
+    const message = job.status === 'SENT'
+      ? `Email sent successfully at ${job.sentAt?.toISOString() || 'unknown time'}`
+      : job.status === 'FAILED'
+        ? 'Email delivery failed'
+        : `Email scheduled for ${job.scheduledAt.toISOString()}`;
+    res.json({ logs: [message], count: 1 });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Keep the queue overview responsive even when BullMQ inspection is delayed.
 app.get('/admin/queues/api/queues', async (req, res, next) => {
   try {
