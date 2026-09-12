@@ -59,5 +59,3 @@ databases:
     plan: free
     databaseName: reachinbox
     user: reachinbox_user
-
-
