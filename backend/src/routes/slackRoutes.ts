@@ -14,6 +14,11 @@ router.get('/connect', (req: Request, res: Response) => {
     return;
   }
 
+  if (env.SLACK_CLIENT_ID.startsWith('mock_') || env.SLACK_CLIENT_SECRET.startsWith('mock_')) {
+    res.redirect(`${env.FRONTEND_URL}/dashboard?slack_error=${encodeURIComponent('Slack OAuth is not configured on the deployed backend')}`);
+    return;
+  }
+
   const state = jwt.sign({ userId }, env.JWT_SECRET, { expiresIn: '10m' });
   const url = getSlackAuthorizeUrl(state);
   res.redirect(url);
