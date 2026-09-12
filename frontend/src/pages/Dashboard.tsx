@@ -19,7 +19,7 @@ import { useAuth } from '../context';
 import { useToast } from '../context/ToastContext';
 import { ComposeModal } from '../components/ComposeModal';
 import { EmailDetailModal } from '../components/EmailDetailModal';
-import { getScheduledEmails, getSentEmails, searchEmails, deleteEmail, getSlackStatus, getSlackConnectUrl } from '../api/emails';
+import { getScheduledEmails, getSentEmails, searchEmails, deleteEmail, getSlackStatus, getSlackConnectUrl, disconnectSlack } from '../api/emails';
 import { API_BASE_URL } from '../api/client';
 import type { EmailJob } from '../types';
 
@@ -302,17 +302,25 @@ export const Dashboard: React.FC = () => {
         {/* Sidebar Footer: Slack Integration Status */}
         <div className="pt-4 border-t border-gray-150">
           {slackStatus?.connected ? (
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] text-xs font-medium text-[#16A34A]">
+            <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] text-xs font-medium text-[#16A34A]">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span className="truncate text-[11px] font-semibold text-emerald-800">Slack Alerts Active</span>
+                <span className="truncate text-[11px] font-semibold text-emerald-800" title={`${slackStatus.teamName || 'Slack'}${slackStatus.channelName ? ` / ${slackStatus.channelName}` : ''}`}>
+                  {slackStatus.channelName || slackStatus.teamName || 'Slack Alerts Active'}
+                </span>
               </div>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-white/90 px-1.5 py-0.5 rounded border border-emerald-200">
-                Live
-              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  await disconnectSlack();
+                  await refetchSlack();
+                  toast.success('Slack disconnected.');
+                }}
+                className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-white/90 px-1.5 py-0.5 rounded border border-emerald-200 hover:bg-emerald-100"
+              >Disconnect</button>
             </div>
           ) : (
             <a

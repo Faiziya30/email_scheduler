@@ -77,8 +77,8 @@ router.get('/status', async (req: Request, res: Response) => {
       data: {
         connected: isConnected,
         teamId: integration?.teamId,
-        teamName: (integration as any)?.teamName || undefined,
-        channelName: (integration as any)?.channelName || undefined,
+        teamName: integration?.teamName || undefined,
+        channelName: integration?.channelName || undefined,
       },
     });
   } catch (error: any) {
@@ -86,6 +86,16 @@ router.get('/status', async (req: Request, res: Response) => {
       status: 'success',
       data: { connected: false },
     });
+  }
+});
+
+router.post('/disconnect', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    await prisma.slackIntegration.deleteMany({ where: { userId } });
+    res.json({ status: 'success', message: 'Slack disconnected.' });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
   }
 });
 

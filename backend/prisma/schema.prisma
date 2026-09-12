@@ -41,6 +41,8 @@ model SlackIntegration {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken String
   webhookUrl  String?
+  channelId   String?
+  channelName String?
   teamId      String?
   teamName    String?
   createdAt   DateTime @default(now())

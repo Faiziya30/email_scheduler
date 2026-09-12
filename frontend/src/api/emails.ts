@@ -101,6 +101,10 @@ export const emailApi = {
     return `${API_BASE_URL}/slack/connect`;
   },
 
+  disconnectSlack: async (): Promise<void> => {
+    await apiClient('/slack/disconnect', { method: 'POST' });
+  },
+
   // Aliases for compatibility
   schedule: (payload: ScheduleEmailPayload) => emailApi.scheduleEmail(payload),
   scheduled: (limit = 100) => emailApi.getScheduledEmails(limit),
@@ -117,5 +121,6 @@ export const {
   deleteEmail,
   getSlackStatus,
   getSlackConnectUrl,
+  disconnectSlack,
 } = emailApi;
 

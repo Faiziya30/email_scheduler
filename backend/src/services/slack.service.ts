@@ -5,7 +5,7 @@ import { prisma } from '../models';
 export const getSlackAuthorizeUrl = (state?: string): string => {
   const params = new URLSearchParams({
     client_id: env.SLACK_CLIENT_ID,
-    scope: 'chat:write,chat:write.public',
+    scope: 'chat:write,chat:write.public,incoming-webhook',
     redirect_uri: env.SLACK_REDIRECT_URI,
     ...(state && { state }),
   });
@@ -39,6 +39,8 @@ export const handleSlackCallback = async (code: string, userId: string) => {
           teamId: response.team?.id,
           teamName: response.team?.name,
           webhookUrl: (response as any).incoming_webhook?.url,
+          channelId: (response as any).incoming_webhook?.channel_id,
+          channelName: (response as any).incoming_webhook?.channel,
         },
       });
     } else {
@@ -49,19 +51,22 @@ export const handleSlackCallback = async (code: string, userId: string) => {
           teamId: response.team?.id,
           teamName: response.team?.name,
           webhookUrl: (response as any).incoming_webhook?.url,
+          channelId: (response as any).incoming_webhook?.channel_id,
+          channelName: (response as any).incoming_webhook?.channel,
         },
       });
     }
 
     // Post an immediate live confirmation message into Slack
     try {
-      const postClient = new WebClient(response.access_token);
-      const targetChannel = (response as any).incoming_webhook?.channel_id || '#general';
-      await postClient.chat.postMessage({
-        channel: targetChannel,
-        text: '🎉 *ReachInbox Scheduler Connected!* Your Slack workspace is now integrated and will receive real-time email rate-limit alerts.',
-      });
-      console.log('✅ Instant Slack welcome message sent to', targetChannel);
+      const webhookUrl = (response as any).incoming_webhook?.url;
+      if (webhookUrl) {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ text: 'ReachInbox Scheduler connected. Rate-limit alerts are now active.' }),
+        });
+      }
     } catch (msgErr: any) {
       console.warn('⚠️ Welcome message posting note:', msgErr.message);
     }
@@ -99,11 +104,19 @@ export const notifySlackRateLimitHit = async (
       return;
     }
 
-    const client = new WebClient(integration.accessToken);
-    await client.chat.postMessage({
-      channel: '#general', // or webhook if configured
-      text: message,
-    });
+    if (integration.webhookUrl) {
+      const response = await fetch(integration.webhookUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: message }),
+      });
+      if (!response.ok) throw new Error(`Slack webhook returned ${response.status}`);
+    } else if (integration.channelId) {
+      const client = new WebClient(integration.accessToken);
+      await client.chat.postMessage({ channel: integration.channelId, text: message });
+    } else {
+      throw new Error('Slack integration has no authorized channel');
+    }
 
     console.log(`[Slack] ✅ Rate limit notification sent to Slack successfully.`);
   } catch (error: any) {
