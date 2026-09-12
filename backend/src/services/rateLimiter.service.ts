@@ -20,8 +20,6 @@ redis.on('error', (err) => {
   // Silent warning for redis connection
 });
 
-const memoryRateCounts = new Map<string, { count: number; expiresAt: number }>();
-
 export interface RateLimitCheckResult {
   allowed: boolean;
   currentCount: number;
@@ -99,31 +97,12 @@ export class RateLimiterService {
         nextHourDate,
         delayUntilNextHourMs,
       };
-    } catch (err: any) {
-      // Memory fallback rate limiter
-      const now = Date.now();
-      const memEntry = memoryRateCounts.get(key);
-      let currentCount = 1;
-      if (memEntry && memEntry.expiresAt > now) {
-        currentCount = memEntry.count + 1;
-        memEntry.count = currentCount;
-      } else {
-        memoryRateCounts.set(key, { count: 1, expiresAt: now + 3600 * 1000 });
-      }
-
-      if (currentCount > limit) {
-        return {
-          allowed: false,
-          currentCount,
-          limit,
-          nextHourDate,
-          delayUntilNextHourMs,
-        };
-      }
-
+    } catch {
+      // Never allow a send when the distributed counter cannot be verified.
+      // The caller reschedules the job and retries after Redis recovers.
       return {
-        allowed: true,
-        currentCount,
+        allowed: false,
+        currentCount: limit + 1,
         limit,
         nextHourDate,
         delayUntilNextHourMs,

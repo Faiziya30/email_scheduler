@@ -60,7 +60,15 @@ export const processPendingDueEmails = async (): Promise<void> => {
       try {
         rateCheck = await RateLimiterService.checkAndConsumeRateLimit(senderId, job.hourlyLimit);
       } catch {
-        rateCheck = { allowed: true, nextHourDate: new Date(Date.now() + 3600000), delayUntilNextHourMs: 0 };
+        const nextHourDate = new Date();
+        nextHourDate.setUTCHours(nextHourDate.getUTCHours() + 1, 0, 0, 0);
+        rateCheck = {
+          allowed: false,
+          currentCount: job.hourlyLimit + 1,
+          limit: job.hourlyLimit,
+          nextHourDate,
+          delayUntilNextHourMs: Math.max(0, nextHourDate.getTime() - Date.now()),
+        };
       }
 
       if (!rateCheck.allowed) {

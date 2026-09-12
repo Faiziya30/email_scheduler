@@ -44,19 +44,6 @@ export class EmailSchedulerService {
 
       // Incremental delay stagger: initial start delay + (i * delay between emails)
       let recipientDelayMs = initialOffsetMs + i * stepDelayMs;
-      if (initialOffsetMs === 0 && i >= effectiveHourlyLimit) {
-        const nextHour = new Date();
-        nextHour.setUTCHours(nextHour.getUTCHours() + 1, 0, 0, 0);
-        recipientDelayMs = Math.max(0, nextHour.getTime() - Date.now()) +
-          (i - effectiveHourlyLimit) * Math.max(stepDelayMs, env.MIN_DELAY_MS_BETWEEN_SENDS);
-        if (i === effectiveHourlyLimit) {
-          RateLimiterService.handleRateLimitHit(
-            activeUserId,
-            sender.emailAddress,
-            nextHour,
-          ).catch(() => {});
-        }
-      }
       let scheduledAt = new Date(Date.now() + recipientDelayMs);
 
       // 1. Create DB record first (status: PENDING)
@@ -74,10 +61,12 @@ export class EmailSchedulerService {
         },
       });
 
-      // A send with no requested delay is an interactive action. Deliver it
-      // inline so the dashboard can show SENT immediately; future sends still
-      // use BullMQ delayed jobs below.
-      if (recipientDelayMs === 0) {
+      // For an immediate batch, reserve the first N recipients for this hour
+      // synchronously. This prevents Redis timeouts from allowing jobs beyond
+      // the selected hourly cap to fall through to the worker.
+      const immediateBatch = initialOffsetMs === 0;
+      const withinImmediateLimit = i < effectiveHourlyLimit;
+      if (immediateBatch && withinImmediateLimit) {
         const rateCheck = await RateLimiterService.checkAndConsumeRateLimit(sender.id, effectiveHourlyLimit);
         if (rateCheck.allowed) {
           try {
@@ -116,13 +105,30 @@ export class EmailSchedulerService {
 
         // Never fall through and send an over-limit immediate email. Move it
         // into the next UTC hour and let BullMQ preserve the deferred job.
+        const nextHour = new Date();
+        nextHour.setUTCHours(nextHour.getUTCHours() + 1, 0, 0, 0);
         await RateLimiterService.handleRateLimitHit(activeUserId, sender.emailAddress, rateCheck.nextHourDate);
         recipientDelayMs = await RateLimiterService.getRescheduledDelay(
           sender.id,
-          rateCheck.nextHourDate,
+          nextHour,
           rateCheck.delayUntilNextHourMs,
         );
         scheduledAt = new Date(Date.now() + recipientDelayMs);
+        await prisma.emailJob.update({
+          where: { id: emailJob.id },
+          data: { scheduledAt },
+        });
+      }
+
+      if (immediateBatch && !withinImmediateLimit) {
+        const nextHour = new Date();
+        nextHour.setUTCHours(nextHour.getUTCHours() + 1, 0, 0, 0);
+        recipientDelayMs = Math.max(0, nextHour.getTime() - Date.now()) +
+          (i - effectiveHourlyLimit) * Math.max(stepDelayMs, env.MIN_DELAY_MS_BETWEEN_SENDS);
+        scheduledAt = new Date(Date.now() + recipientDelayMs);
+        if (i === effectiveHourlyLimit) {
+          await RateLimiterService.handleRateLimitHit(activeUserId, sender.emailAddress, nextHour);
+        }
         await prisma.emailJob.update({
           where: { id: emailJob.id },
           data: { scheduledAt },
