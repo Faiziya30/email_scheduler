@@ -35,7 +35,6 @@ app.use(passport.initialize());
 app.get('/admin/queues/api/queues', async (req, res, next) => {
   try {
     const requestedStatus = typeof req.query.status === 'string' ? req.query.status : 'latest';
-    const activeQueue = typeof req.query.activeQueue === 'string' ? req.query.activeQueue : undefined;
     const page = Math.max(1, Number(req.query.page) || 1);
     const jobsPerPage = Math.min(100, Math.max(1, Number(req.query.jobsPerPage) || 10));
     const [pending, completed, failed] = await Promise.all([
@@ -44,14 +43,12 @@ app.get('/admin/queues/api/queues', async (req, res, next) => {
       prisma.emailJob.count({ where: { status: 'FAILED' } }),
     ]);
     const status = requestedStatus === 'failed' ? 'FAILED' : requestedStatus === 'completed' ? 'SENT' : 'PENDING';
-    const jobs = activeQueue
-      ? await prisma.emailJob.findMany({
-          where: { status },
-          orderBy: { scheduledAt: 'asc' },
-          skip: (page - 1) * jobsPerPage,
-          take: jobsPerPage,
-        })
-      : [];
+    const jobs = await prisma.emailJob.findMany({
+      where: { status },
+      orderBy: { scheduledAt: 'asc' },
+      skip: (page - 1) * jobsPerPage,
+      take: jobsPerPage,
+    });
 
     res.json({
       queues: [{
