@@ -42,9 +42,16 @@ app.get('/admin/queues/api/queues', async (req, res, next) => {
       prisma.emailJob.count({ where: { status: 'SENT' } }),
       prisma.emailJob.count({ where: { status: 'FAILED' } }),
     ]);
-    const status = requestedStatus === 'failed' ? 'FAILED' : requestedStatus === 'completed' ? 'SENT' : 'PENDING';
+    const status: 'FAILED' | 'SENT' | 'PENDING' = requestedStatus === 'failed'
+      ? 'FAILED'
+      : requestedStatus === 'completed'
+        ? 'SENT'
+        : 'PENDING';
+    const jobWhere = requestedStatus === 'latest'
+      ? {}
+      : { status };
     const jobs = await prisma.emailJob.findMany({
-      where: { status },
+      where: jobWhere,
       orderBy: { scheduledAt: 'asc' },
       skip: (page - 1) * jobsPerPage,
       take: jobsPerPage,
