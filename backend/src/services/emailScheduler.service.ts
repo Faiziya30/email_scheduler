@@ -3,6 +3,8 @@ import { emailQueue } from '../queues/emailQueue';
 import { getOrCreateDefaultUserAndSender } from '../models/userHelper';
 import { env } from '../config/env';
 import { indexEmail } from './search.service';
+import { sendEmail } from './email.service';
+import { RateLimiterService } from './rateLimiter.service';
 
 export interface ScheduleEmailPayload {
   subject: string;
@@ -58,6 +60,47 @@ export class EmailSchedulerService {
           hourlyLimit: effectiveHourlyLimit,
         },
       });
+
+      // A send with no requested delay is an interactive action. Deliver it
+      // inline so the dashboard can show SENT immediately; future sends still
+      // use BullMQ delayed jobs below.
+      if (recipientDelayMs === 0) {
+        const rateCheck = await RateLimiterService.checkAndConsumeRateLimit(sender.id, effectiveHourlyLimit);
+        if (rateCheck.allowed) {
+          try {
+            await sendEmail({
+              from: sender.emailAddress,
+              to: recipient,
+              subject,
+              body,
+            });
+            const sentAt = new Date();
+            const sentJob = await prisma.emailJob.update({
+              where: { id: emailJob.id },
+              data: { status: 'SENT', sentAt },
+            });
+            indexEmail({
+              id: sentJob.id,
+              userId: activeUserId,
+              sender: sender.emailAddress,
+              recipient,
+              subject,
+              body,
+              status: 'SENT',
+              sentAt,
+            }).catch(() => {});
+            scheduledJobs.push(sentJob);
+            continue;
+          } catch (sendError) {
+            const failedJob = await prisma.emailJob.update({
+              where: { id: emailJob.id },
+              data: { status: 'FAILED' },
+            });
+            scheduledJobs.push(failedJob);
+            continue;
+          }
+        }
+      }
 
       // 2. Deterministic BullMQ Job ID from DB ID
       const bullJobId = `email-job-${emailJob.id}`;
