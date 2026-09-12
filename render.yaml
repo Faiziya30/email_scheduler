@@ -49,6 +49,9 @@ services:
   - type: redis
     name: reachinbox-redis
     plan: free
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: Allow backend service access
 
 # ── Managed PostgreSQL Database ─────────────────────────────────────────────
 databases:
