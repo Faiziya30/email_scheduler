@@ -2,6 +2,7 @@ import { prisma } from '../models';
 import { sendEmail } from '../services/email.service';
 import { RateLimiterService } from '../services/rateLimiter.service';
 import { indexEmail } from '../services/search.service';
+import { emailQueue } from '../queues/emailQueue';
 
 let isRunningSweep = false;
 
@@ -15,13 +16,11 @@ export const processPendingDueEmails = async (): Promise<void> => {
 
   try {
     const now = new Date();
-    // Fetch all pending jobs whose scheduled time has passed
+    // Fetch due jobs. BullMQ remains the owner for healthy waiting/active jobs;
+    // recovery only reclaims overdue delayed jobs that Redis never promoted.
     const dueJobs = await prisma.emailJob.findMany({
       where: {
         status: 'PENDING',
-        // BullMQ owns every row with a bullJobId. Recovery is only for rows
-        // whose enqueue failed before Redis accepted the job.
-        bullJobId: null,
         scheduledAt: { lte: now },
       },
       include: {
@@ -34,6 +33,25 @@ export const processPendingDueEmails = async (): Promise<void> => {
     if (dueJobs.length === 0) return;
 
     for (const job of dueJobs) {
+      if (job.bullJobId) {
+        try {
+          const bullJob = await Promise.race([
+            emailQueue.getJob(job.bullJobId),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
+          ]);
+          if (bullJob) {
+            const state = await Promise.race([
+              bullJob.getState(),
+              new Promise<string>((resolve) => setTimeout(() => resolve('unknown'), 1500)),
+            ]);
+            if (state === 'active' || state === 'waiting' || state === 'waiting-children') continue;
+            if (state === 'delayed' && job.scheduledAt.getTime() > now.getTime()) continue;
+          }
+        } catch {
+          // Redis inspection failed; the DB recovery path below is the fallback.
+        }
+      }
+
       const senderEmail = job.sender?.emailAddress || 'sender@reachinbox.ai';
       const senderId = job.senderId;
 
