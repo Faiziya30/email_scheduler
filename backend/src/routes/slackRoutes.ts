@@ -15,7 +15,7 @@ router.get('/connect', (req: Request, res: Response) => {
   }
 
   if (env.SLACK_CLIENT_ID.startsWith('mock_') || env.SLACK_CLIENT_SECRET.startsWith('mock_')) {
-    res.redirect(`${env.FRONTEND_URL}/dashboard?slack_error=${encodeURIComponent('Slack OAuth is not configured on the deployed backend')}`);
+    res.redirect(`${env.FRONTEND_URL}/dashboard?slack_error=${encodeURIComponent('Slack OAuth is not configured on this backend')}`);
     return;
   }
 
