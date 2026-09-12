@@ -21,7 +21,7 @@ const envSchema = z.object({
 
   SLACK_CLIENT_ID: z.string().default('mock_slack_client_id'),
   SLACK_CLIENT_SECRET: z.string().default('mock_slack_client_secret'),
-  SLACK_REDIRECT_URI: z.string().default('http://localhost:5000/api/auth/slack/callback'),
+  SLACK_REDIRECT_URI: z.string().default('http://localhost:5000/api/slack/callback'),
 
   WORKER_CONCURRENCY: z.string().default('5').transform((val) => parseInt(val, 10)),
   MIN_DELAY_MS_BETWEEN_SENDS: z.string().default('1000').transform((val) => parseInt(val, 10)),
