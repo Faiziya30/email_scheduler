@@ -31,6 +31,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 
+// Open the only configured queue when a status tab is bookmarked directly.
+app.get('/admin/queues/', (req, res) => {
+  const query = new URLSearchParams();
+  if (typeof req.query.status === 'string') query.set('status', req.query.status);
+  res.redirect(`/admin/queues/queue/emailQueue${query.toString() ? `?${query.toString()}` : ''}`);
+});
+
 // Keep the queue overview responsive even when BullMQ inspection is delayed.
 app.get('/admin/queues/api/queues', async (req, res, next) => {
   try {
