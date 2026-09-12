@@ -128,6 +128,7 @@ export const emailWorker = new Worker<EmailJobData>(
         data: {
           status: 'SENT',
           sentAt,
+          previewUrl: sendResult.previewUrl || null,
         },
       });
 

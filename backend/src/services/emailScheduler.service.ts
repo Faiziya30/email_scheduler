@@ -68,7 +68,7 @@ export class EmailSchedulerService {
         const rateCheck = await RateLimiterService.checkAndConsumeRateLimit(sender.id, effectiveHourlyLimit);
         if (rateCheck.allowed) {
           try {
-            await sendEmail({
+            const sendResult = await sendEmail({
               from: sender.emailAddress,
               to: recipient,
               subject,
@@ -77,7 +77,7 @@ export class EmailSchedulerService {
             const sentAt = new Date();
             const sentJob = await prisma.emailJob.update({
               where: { id: emailJob.id },
-              data: { status: 'SENT', sentAt },
+              data: { status: 'SENT', sentAt, previewUrl: sendResult.previewUrl || null },
             });
             indexEmail({
               id: sentJob.id,

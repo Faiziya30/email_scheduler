@@ -96,6 +96,7 @@ export const processPendingDueEmails = async (): Promise<void> => {
           data: {
             status: 'SENT',
             sentAt,
+            previewUrl: sendResult.previewUrl || null,
           },
         });
 

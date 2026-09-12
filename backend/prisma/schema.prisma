@@ -58,6 +58,7 @@ model EmailJob {
   status      EmailStatus @default(PENDING)
   scheduledAt DateTime
   sentAt      DateTime?
+  previewUrl   String?
   delayMs     Int         @default(1000)
   hourlyLimit Int         @default(100)
   bullJobId   String?     @unique

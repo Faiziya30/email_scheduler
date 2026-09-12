@@ -77,7 +77,7 @@ export const sendEmail = async ({
       html: `<div style="font-family: Arial, sans-serif; line-height: 1.6;">${body.replace(/\n/g, '<br/>')}</div>`,
     });
 
-    const previewUrl = nodemailer.getTestMessageUrl(info) || `https://ethereal.email/messages`;
+    const previewUrl = nodemailer.getTestMessageUrl(info) || false;
     console.log(`📨 Email sent to ${to} | Message ID: ${info.messageId}`);
     if (previewUrl) {
       console.log(`🔗 Ethereal Preview URL: ${previewUrl}`);
@@ -99,7 +99,7 @@ export const sendEmail = async ({
     });
     return {
       messageId: fallbackInfo.messageId || `ethereal_${Date.now()}`,
-      previewUrl: `https://ethereal.email/messages`,
+      previewUrl: false,
     };
   }
 };

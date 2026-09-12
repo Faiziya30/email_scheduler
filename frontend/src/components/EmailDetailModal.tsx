@@ -128,21 +128,17 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({ email, onClo
             {email.body}
           </div>
 
-          {/* Ethereal SMTP Link if Sent */}
+          {/* Delivery result and real Ethereal preview, when available */}
           {isSent && (
             <div className="pt-4 border-t border-gray-150 flex items-center justify-between">
               <span className="text-xs text-emerald-600 font-medium flex items-center gap-1.5">
-                ✓ Delivered via Ethereal SMTP (Test Sandbox)
+                ✓ Email processed successfully
               </span>
-              <a
-                href="https://ethereal.email/messages"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-[#00A854] hover:underline font-semibold"
-              >
-                <span>View in Ethereal Mailbox</span>
-                <span className="text-[10px]">↗</span>
-              </a>
+              {email.previewUrl ? (
+                <a href={email.previewUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-[#00A854] hover:underline font-semibold">
+                  <span>View Ethereal Preview</span><span className="text-[10px]">↗</span>
+                </a>
+              ) : <span className="text-xs text-gray-400">SMTP preview unavailable</span>}
             </div>
           )}
         </div>

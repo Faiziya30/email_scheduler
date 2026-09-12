@@ -15,6 +15,7 @@ export interface EmailJob {
   status: EmailStatus;
   scheduledAt: string;
   sentAt: string | null;
+  previewUrl?: string | null;
   delayMs: number;
   hourlyLimit: number;
   bullJobId: string | null;

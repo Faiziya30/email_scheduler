@@ -82,7 +82,7 @@ app.get('/admin/queues/api/queues', async (req, res, next) => {
       : { status };
     const jobs = await prisma.emailJob.findMany({
       where: jobWhere,
-      orderBy: { scheduledAt: 'asc' },
+      orderBy: requestedStatus === 'completed' ? { sentAt: 'desc' } : { scheduledAt: 'asc' },
       skip: (page - 1) * jobsPerPage,
       take: jobsPerPage,
     });
@@ -103,7 +103,7 @@ app.get('/admin/queues/api/queues', async (req, res, next) => {
           failedReason: job.status === 'FAILED' ? 'Email delivery failed' : null,
           stacktrace: [],
           opts: {},
-          data: { recipient: job.recipient, subject: job.subject },
+          data: { recipient: job.recipient, subject: job.subject, previewUrl: job.previewUrl },
           name: 'send-email',
           returnValue: null,
           isFailed: job.status === 'FAILED',
