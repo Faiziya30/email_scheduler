@@ -11,6 +11,9 @@ const parseRedisUrl = (redisUrl: string): ConnectionOptions => {
       port: parseInt(parsed.port || (isTls ? '6379' : '6379'), 10),
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
+      connectTimeout: 5000,
+      commandTimeout: 5000,
+      retryStrategy: (times: number) => Math.min(times * 250, 2000),
     };
 
     if (parsed.username) {
@@ -33,6 +36,9 @@ const parseRedisUrl = (redisUrl: string): ConnectionOptions => {
       port: 6379,
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
+      connectTimeout: 5000,
+      commandTimeout: 5000,
+      retryStrategy: (times: number) => Math.min(times * 250, 2000),
     };
   }
 };
