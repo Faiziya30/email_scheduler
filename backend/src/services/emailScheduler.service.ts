@@ -43,8 +43,21 @@ export class EmailSchedulerService {
       if (!recipient) continue;
 
       // Incremental delay stagger: initial start delay + (i * delay between emails)
-      const recipientDelayMs = initialOffsetMs + i * stepDelayMs;
-      const scheduledAt = new Date(Date.now() + recipientDelayMs);
+      let recipientDelayMs = initialOffsetMs + i * stepDelayMs;
+      if (initialOffsetMs === 0 && i >= effectiveHourlyLimit) {
+        const nextHour = new Date();
+        nextHour.setUTCHours(nextHour.getUTCHours() + 1, 0, 0, 0);
+        recipientDelayMs = Math.max(0, nextHour.getTime() - Date.now()) +
+          (i - effectiveHourlyLimit) * Math.max(stepDelayMs, env.MIN_DELAY_MS_BETWEEN_SENDS);
+        if (i === effectiveHourlyLimit) {
+          RateLimiterService.handleRateLimitHit(
+            activeUserId,
+            sender.emailAddress,
+            nextHour,
+          ).catch(() => {});
+        }
+      }
+      let scheduledAt = new Date(Date.now() + recipientDelayMs);
 
       // 1. Create DB record first (status: PENDING)
       const emailJob = await prisma.emailJob.create({
@@ -100,6 +113,20 @@ export class EmailSchedulerService {
             continue;
           }
         }
+
+        // Never fall through and send an over-limit immediate email. Move it
+        // into the next UTC hour and let BullMQ preserve the deferred job.
+        await RateLimiterService.handleRateLimitHit(activeUserId, sender.emailAddress, rateCheck.nextHourDate);
+        recipientDelayMs = await RateLimiterService.getRescheduledDelay(
+          sender.id,
+          rateCheck.nextHourDate,
+          rateCheck.delayUntilNextHourMs,
+        );
+        scheduledAt = new Date(Date.now() + recipientDelayMs);
+        await prisma.emailJob.update({
+          where: { id: emailJob.id },
+          data: { scheduledAt },
+        });
       }
 
       // 2. Deterministic BullMQ Job ID from DB ID
