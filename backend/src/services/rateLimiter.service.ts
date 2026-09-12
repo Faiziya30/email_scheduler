@@ -1,8 +1,10 @@
 import Redis, { RedisOptions } from 'ioredis';
 import { env } from '../config/env';
 import { notifySlackRateLimitHit } from './slack.service';
+import { normalizeRedisUrl } from '../config/redis';
 
-const isTls = env.REDIS_URL.startsWith('rediss://');
+const redisUrl = normalizeRedisUrl(env.REDIS_URL);
+const isTls = redisUrl.startsWith('rediss://');
 const redisOptions: RedisOptions = {
   maxRetriesPerRequest: 1,
   enableReadyCheck: false,
@@ -13,7 +15,7 @@ const redisOptions: RedisOptions = {
   ...(isTls ? { tls: { rejectUnauthorized: false } } : {}),
 };
 
-const redis = new Redis(env.REDIS_URL, redisOptions);
+const redis = new Redis(redisUrl, redisOptions);
 redis.on('error', (err) => {
   // Silent warning for redis connection
 });

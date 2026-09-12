@@ -1,9 +1,19 @@
 import { ConnectionOptions } from 'bullmq';
 import { env } from './env';
 
+export const normalizeRedisUrl = (value: string): string => {
+  const input = value.trim().replace(/^['"]|['"]$/g, '');
+  const cliMatch = input.match(/redis-cli\s+--tls\s+-u\s+(rediss?:\/\/\S+)/i);
+  if (cliMatch) {
+    return cliMatch[1].replace(/["'\\]+$/, '').replace(/^redis:\/\//, 'rediss://');
+  }
+
+  return input.replace(/[\r\n]+$/, '');
+};
+
 const parseRedisUrl = (redisUrl: string): ConnectionOptions => {
   try {
-    const parsed = new URL(redisUrl);
+    const parsed = new URL(normalizeRedisUrl(redisUrl));
     const isTls = parsed.protocol === 'rediss:';
 
     const opts: ConnectionOptions = {
