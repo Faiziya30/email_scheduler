@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import {
   Clock,
   Send,
@@ -14,12 +14,24 @@ import {
   CheckCircle2,
   X,
   Trash2,
+  Zap,
+  BarChart2,
 } from 'lucide-react';
 import { useAuth } from '../context';
 import { useToast } from '../context/ToastContext';
 import { ComposeModal } from '../components/ComposeModal';
 import { EmailDetailModal } from '../components/EmailDetailModal';
-import { getScheduledEmails, getSentEmails, searchEmails, deleteEmail, getSlackStatus, getSlackConnectUrl, disconnectSlack } from '../api/emails';
+import {
+  getScheduledEmails,
+  getSentEmails,
+  searchEmails,
+  deleteEmail,
+  getSlackStatus,
+  getSlackConnectUrl,
+  disconnectSlack,
+  getRateLimitStats,
+  testSlackAlert,
+} from '../api/emails';
 import { API_BASE_URL } from '../api/client';
 import type { EmailJob } from '../types';
 
@@ -71,6 +83,25 @@ export const Dashboard: React.FC = () => {
     queryKey: ['slack', 'status'],
     queryFn: getSlackStatus,
     refetchInterval: 10_000,
+  });
+
+  // ── Rate-Limit Stats Query ───────────────────────────────────────────────
+  const { data: rateLimitStats } = useQuery({
+    queryKey: ['slack', 'rate-limit-stats'],
+    queryFn: getRateLimitStats,
+    refetchInterval: 8_000,
+    enabled: !!slackStatus,
+  });
+
+  // ── Test Slack Alert Mutation ────────────────────────────────────────────
+  const testSlackMutation = useMutation({
+    mutationFn: testSlackAlert,
+    onSuccess: (data) => {
+      toast.success(data?.message || 'Test alert sent to Slack!', '🧪 Test Alert Sent');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to send test alert. Is Slack connected?', 'Test Alert Failed');
+    },
   });
 
   // Handle ?slack=connected redirect parameter from Slack OAuth
@@ -300,28 +331,99 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Sidebar Footer: Slack Integration Status */}
-        <div className="pt-4 border-t border-gray-150">
+        <div className="pt-4 border-t border-gray-150 space-y-2">
           {slackStatus?.connected ? (
-            <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] text-xs font-medium text-[#16A34A]">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="truncate text-[11px] font-semibold text-emerald-800" title={`${slackStatus.teamName || 'Slack'}${slackStatus.channelName ? ` / ${slackStatus.channelName}` : ''}`}>
-                  {slackStatus.channelName || slackStatus.teamName || 'Slack Alerts Active'}
-                </span>
+            <>
+              {/* Connected header row */}
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] text-xs font-medium text-[#16A34A]">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span
+                    className="truncate text-[11px] font-semibold text-emerald-800"
+                    title={`${slackStatus.teamName || 'Slack'}${
+                      slackStatus.channelName ? ` / ${slackStatus.channelName}` : ''
+                    }`}
+                  >
+                    {slackStatus.channelName || slackStatus.teamName || 'Slack Alerts Active'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await disconnectSlack();
+                    await refetchSlack();
+                    toast.success('Slack disconnected.');
+                  }}
+                  className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-white/90 px-1.5 py-0.5 rounded border border-emerald-200 hover:bg-emerald-100"
+                >
+                  Disconnect
+                </button>
               </div>
+
+              {/* Rate-limit usage badge */}
+              {rateLimitStats && (
+                <div className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-100 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <BarChart2 className="h-3 w-3" />
+                      Emails this hour
+                    </span>
+                    <span
+                      className={`font-bold ${
+                        rateLimitStats.used >= rateLimitStats.limit
+                          ? 'text-red-500'
+                          : rateLimitStats.used >= rateLimitStats.limit * 0.7
+                          ? 'text-amber-500'
+                          : 'text-emerald-600'
+                      }`}
+                    >
+                      {rateLimitStats.used}/{rateLimitStats.limit}
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        rateLimitStats.used >= rateLimitStats.limit
+                          ? 'bg-red-400'
+                          : rateLimitStats.used >= rateLimitStats.limit * 0.7
+                          ? 'bg-amber-400'
+                          : 'bg-emerald-400'
+                      }`}
+                      style={{
+                        width: `${Math.min(100, (rateLimitStats.used / rateLimitStats.limit) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  {rateLimitStats.used >= rateLimitStats.limit && (
+                    <p className="text-[9px] text-red-500 font-medium">
+                      ⏰ Resets{' '}
+                      {new Date(rateLimitStats.nextResetUtc).toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZoneName: 'short',
+                      })}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Test Slack Alert button */}
               <button
                 type="button"
-                onClick={async () => {
-                  await disconnectSlack();
-                  await refetchSlack();
-                  toast.success('Slack disconnected.');
-                }}
-                className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-white/90 px-1.5 py-0.5 rounded border border-emerald-200 hover:bg-emerald-100"
-              >Disconnect</button>
-            </div>
+                id="test-slack-alert-btn"
+                onClick={() => testSlackMutation.mutate()}
+                disabled={testSlackMutation.isPending}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#4A154B]/10 hover:bg-[#4A154B]/20 border border-[#4A154B]/20 text-[10px] font-semibold text-[#4A154B] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Send a live test Slack alert (bypasses rate-limit dedup)"
+              >
+                <Zap className="h-3 w-3" />
+                {testSlackMutation.isPending ? 'Sending…' : '🧪 Test Slack Alert'}
+              </button>
+            </>
           ) : (
             <a
               href={getSlackConnectUrl()}

@@ -8,6 +8,7 @@ import healthRouter from './routes/health';
 import authRouter from './routes/authRoutes';
 import emailRouter from './routes/emailRoutes';
 import slackRouter from './routes/slackRoutes';
+import slackPublicRouter from './routes/slackPublicRoutes';
 import { bullBoardRouter } from './config/bullBoard';
 import { errorHandler } from './middlewares/errorHandler';
 import { authGuard } from './middlewares/authGuard';
@@ -135,6 +136,10 @@ app.use('/admin/queues', bullBoardRouter);
 // Public API Routes
 app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
+
+// Public Slack routes (callback & connect must NOT be behind authGuard –
+// Slack's OAuth redirect carries no JWT, only a signed `state` param)
+app.use('/api/slack', slackPublicRouter);
 
 // Protected API Routes (Requires JWT authGuard)
 app.use('/api/emails', authGuard, emailRouter);

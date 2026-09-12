@@ -105,6 +105,36 @@ export const emailApi = {
     await apiClient('/slack/disconnect', { method: 'POST' });
   },
 
+  /**
+   * Get current hour's rate-limit usage for the logged-in sender
+   */
+  getRateLimitStats: async (): Promise<{
+    used: number;
+    limit: number;
+    senderEmail: string;
+    nextResetUtc: string;
+  }> => {
+    try {
+      const res = await apiClient<ApiSuccess<{
+        used: number;
+        limit: number;
+        senderEmail: string;
+        nextResetUtc: string;
+      }>>('/slack/rate-limit-stats');
+      return res.data;
+    } catch {
+      return { used: 0, limit: 3, senderEmail: '', nextResetUtc: new Date().toISOString() };
+    }
+  },
+
+  /**
+   * Trigger a test Slack rate-limit alert (bypasses dedup so it always fires)
+   */
+  testSlackAlert: async (): Promise<{ message: string }> => {
+    const res = await apiClient<ApiSuccess<{ message: string }>>('/slack/test', { method: 'POST' });
+    return res.data;
+  },
+
   // Aliases for compatibility
   schedule: (payload: ScheduleEmailPayload) => emailApi.scheduleEmail(payload),
   scheduled: (limit = 100) => emailApi.getScheduledEmails(limit),
@@ -122,5 +152,6 @@ export const {
   getSlackStatus,
   getSlackConnectUrl,
   disconnectSlack,
+  getRateLimitStats,
+  testSlackAlert,
 } = emailApi;
-

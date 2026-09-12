@@ -145,4 +145,21 @@ export class RateLimiterService {
   ): Promise<void> {
     await notifySlackRateLimitHit(userId, senderEmail, 1, nextHourDate);
   }
+
+  /**
+   * Returns the current hourly email count for a sender without incrementing.
+   * Used for the dashboard stats indicator.
+   */
+  public static async getCurrentHourCount(senderId: string): Promise<number> {
+    const key = this.getRateLimitKey(senderId);
+    try {
+      const val = await Promise.race([
+        redis.get(key),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1000)),
+      ]);
+      return val ? Math.max(0, parseInt(val, 10)) : 0;
+    } catch {
+      return 0;
+    }
+  }
 }
